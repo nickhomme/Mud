@@ -104,6 +104,17 @@ public class Jvm : IDisposable
         return result;
     }
 
+    public TReturn CallStatic<TReturn, TClass>(string method, params object[] args)
+    {
+        var classPath = typeof(TClass).GetCustomAttribute<ClassPathAttribute>()?.ClassPath;
+        if (string.IsNullOrWhiteSpace(classPath))
+        {
+            throw new ArgumentException(
+                "Missing class path for new object. Make sure the ClassPath attribute is set and has a value");
+        }
+        return CallStatic<TReturn>(classPath, method, args);
+    }
+    
     public T CallStaticCustomType<T>(string classPath, string method, string returnType, params object[] args)
     {
         var val = JavaObject.MapVal(Instance.Env, CallStatic(classPath, method, new(JavaObjType.Custom)
@@ -118,11 +129,19 @@ public class Jvm : IDisposable
 
         return (T) val;
 
-
     }
-    public T CallStatic<T>(string classPath, string method, params object[] args)
+    
+    public T CallStatic<T>(string classPath, string method, params object[] args) => CallStatic<T>(classPath, method, JavaObject.MapToType(typeof(T)), args);
+    
+    private T CallStatic<T>(string classPath, string method, JavaFullType returnType, params object[] args)
     {
-        return (T) JavaObject.MapVal(Instance.Env, CallStatic(classPath, method, JavaObject.MapToType(typeof(T)), args));
+        var val =  JavaObject.MapVal(Instance.Env, CallStatic(classPath, method, returnType, args));
+        if (val is IntPtr valPtr)
+        {
+            return (T) NewObj(typeof(T), valPtr, returnType.CustomType);
+        }
+
+        return (T) val;
     }
     
     public void CallStatic(string classPath, string method, params object[] args)

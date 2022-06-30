@@ -181,6 +181,10 @@ public class JavaObject : DynamicObject, IDisposable
                 break;
             case JavaTypedVal v:
                 return v;
+            case Enum v:
+                javaVal = new JavaVal(Convert.ToInt32(v));
+                type = JavaType.Int;
+                break;
             default:
                 throw new ConstraintException($"Cannot determine java type for val: {val?.GetType()?.Name ?? "null"} ");
         }
@@ -341,6 +345,10 @@ public class JavaObject : DynamicObject, IDisposable
     private static extern void release_obj(IntPtr env, IntPtr obj);
     public void Dispose()
     {
+        if (Env == null)
+        {
+            return;
+        }
         release_obj(Env, Jclass);
         release_obj(Env, Jobj);
         foreach (var propFieldsValue in PropFields.Values)
