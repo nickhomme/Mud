@@ -46,7 +46,7 @@ typedef struct _Java_Val {
     const char* char_ptr;
   } string_val;
   jobject obj_val;
-  jobjectArray obj_arr_val;
+  jarray obj_arr_val;
 } Java_Val;
 
 
@@ -55,6 +55,7 @@ typedef struct _Java_Full_Type {
   Java_Object_Type object_type;
 //  void *value;
   const char* custom_type;
+  struct _Java_Full_Type* array_type;
 } Java_Full_Type;
 
 
@@ -337,6 +338,19 @@ static const char * _java_get_obj_type_string(Java_Full_Type typeData) {
           str = "Ljava/lang/String";
           break;
         }
+        case Java_Object_Array: {
+          char* arrayTypeStr = (char*) _java_get_obj_type_string(*typeData.array_type);
+          size_t arrayTypeStrLen = strlen(arrayTypeStr);
+          str = malloc(sizeof(char) * (arrayTypeStrLen + 2));
+          str[0] = '[';
+          memcpy(str + 1, arrayTypeStr, arrayTypeStrLen);
+          str[arrayTypeStrLen + 2] = '\0';
+          // if it was a custom type or an array then free that allocated formatted string
+          if (*typeData.array_type->custom_type || typeData.array_type->object_type == Java_Object_Array) {
+            free(arrayTypeStr);
+          }
+          return str;
+        }
         case Java_Object_Custom: {
           unsigned long customLen = strlen(typeData.custom_type);
           str = malloc(sizeof(char) * 2 + customLen);
@@ -400,6 +414,7 @@ static char * _java_args_to_args_type(Java_Args* args) {
   safe_free(str);
   return finalStr;
 }
+
 static const char* _java_method_typing_string(Java_Full_Type returnType, Java_Args* args) {
   const char* str = _java_args_to_args_type(args);
   const char* returnTypeStr = _java_get_obj_type_string(returnType);

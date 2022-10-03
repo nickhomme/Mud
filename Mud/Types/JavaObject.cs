@@ -262,6 +262,8 @@ public class JavaObject : DynamicObject, IDisposable
                         val = typedVal.Val.ObjVal;
                         break;
                     case JavaObjType.Array:
+                        val = typedVal.Val.ObjArrayVal;
+                        break;
                     default:
                         throw new NotImplementedException($"ObjectType: {typedVal.Typing.ObjectType} not mapped");
                 }

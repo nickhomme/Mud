@@ -14,6 +14,7 @@ internal struct JavaFullType
     public JavaType Type { get; init; } = 0;
     public JavaObjType ObjectType { get; init; } = 0;
     public string? CustomType { get; init; } = null;
+    public IntPtr ArrayType { get; init; } = IntPtr.Zero;
 
     public JavaFullType(JavaType type)
     {
@@ -47,7 +48,7 @@ internal struct JavaVal
     public double DoubleVal { get; init; } = default;
     public JString StringVal { get; init; } = default;
     public IntPtr ObjVal { get; init; } = default;
-    public IntPtr ObjArrayVal { get; init; } = default;
+    public JArray ArrayVal { get; init; } = default;
 
     public JavaVal(){}
     public JavaVal(byte boolVal) : this()
@@ -99,7 +100,6 @@ internal struct JavaVal
     public JavaVal(IntPtr objVal) : this()
     {
         ObjVal = objVal;
-        ObjArrayVal = objVal;
     }
 }
 
@@ -115,6 +115,23 @@ public struct JString
     }
 
     public JString(string val) : this()
+    {
+        Val = val;
+    }
+}
+
+
+internal struct JArray
+{
+    public int Size { get; init; }
+    public IntPtr JavaArray { get; init; }
+
+    public T GetAt<T>(int index)
+    {
+        
+    }
+
+    public JArray(string val) : this()
     {
         Val = val;
     }
