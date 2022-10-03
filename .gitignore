@@ -1,6 +1,7 @@
 Mud/Clib/cmake-build-debug
-
-
+*.dylib
+*.so
+*.dll
 
 ### Java template
 # Compiled class file

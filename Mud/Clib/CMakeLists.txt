@@ -7,7 +7,7 @@ endif()
 #set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/Modules/")
 set(CMAKE_C_STANDARD 17)
 
-add_library(Mud SHARED include/mud.h src/mud.c include/java-arg.h src/memory-util.h src/memory-util.c)
+add_library(Mud SHARED include/mud.h src/mud.c include/java-arg.h src/memory-util.h src/memory-util.c src/signature_parse.c src/signature_parse.h)
 
 find_package(JNI REQUIRED)
 find_package(Java REQUIRED)

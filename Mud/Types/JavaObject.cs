@@ -1,5 +1,6 @@
 using System.Data;
 using System.Dynamic;
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
@@ -36,31 +37,45 @@ public class JavaObject : DynamicObject, IDisposable
         Jclass = jClass;
     }
     
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "_java_build_class_object")]
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_build_class_object")]
     internal static extern IntPtr build_obj_by_path(IntPtr env, string classPath);
     
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "_java_build_object")]
-    internal static extern IntPtr build_obj(IntPtr env, IntPtr jClass);
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_build_object")]
+    internal static extern IntPtr build_obj(IntPtr env, IntPtr jClass, IntPtr args);
     
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "_java_get_class")]
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_get_class")]
     internal static extern IntPtr get_class(IntPtr env, string classPath);
     
     private Dictionary<string, IntPtr> PropFields { get; } = new();
     
-    internal JavaObject(IntPtr env, string classPath, IntPtr jClass)
+    internal JavaObject(IntPtr env, string classPath, IntPtr jClass, params object[] args)
     {
         Env = env;
         ClassPath = classPath;
         Jclass = jClass;
-        Jobj = build_obj(env, jClass);
+        var argsPtr = new_args(args.Length);
+        var argList = args.Select(JavaObject.MapToVal).ToList();
+        foreach (var arg in argList)
+        {
+            args_add(argsPtr, arg);
+        }
+        Jobj = build_obj(env, jClass, argsPtr);
+        Jvm.interop_free(argsPtr);
     }
     
-    internal JavaObject(IntPtr env, string classPath)
+    internal JavaObject(IntPtr env, string classPath, params object[] args)
     {
         Env = env;
         ClassPath = classPath;
         Jclass = get_class(env, classPath);
-        Jobj = build_obj(env, Jclass);
+        var argsPtr = new_args(args.Length);
+        var argList = args.Select(JavaObject.MapToVal).ToList();
+        foreach (var arg in argList)
+        {
+            args_add(argsPtr, arg);
+        }
+        Jobj = build_obj(env, Jclass, argsPtr);
+        Jvm.interop_free(argsPtr);
     }
 
 
@@ -149,7 +164,11 @@ public class JavaObject : DynamicObject, IDisposable
                 type = JavaType.Byte;
                 break;
             case bool v:
+                #if !NET7_0_OR_GREATER
                 javaVal = new JavaVal(v ? byte.One : byte.Zero);
+                #else
+                javaVal = new JavaVal((byte)(v ? 1: 0));
+                #endif
                 type = JavaType.Bool;
                 break;
             case char v:
@@ -258,16 +277,14 @@ public class JavaObject : DynamicObject, IDisposable
     
     
     
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "_java_call_method")]
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_call_method")]
     private static extern JavaTypedVal call_method(IntPtr env, IntPtr obj, string method, JavaFullType type, IntPtr args);
     
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "interop_free")]
-    internal static extern void interop_free(IntPtr ptr);
     
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "_java_args_new_ptr")]
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_args_new_ptr")]
     internal static extern IntPtr new_args(int argAmnt);
     
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "_java_args_add")]
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_args_add")]
     internal static extern void args_add(IntPtr args, JavaTypedVal arg);
 
     private JavaTypedVal Call(string method, JavaFullType returnType, params object[] args)
@@ -281,7 +298,7 @@ public class JavaObject : DynamicObject, IDisposable
         }
 
         var result = call_method(Env, Jobj, method, returnType, argsPtr);
-        interop_free(argsPtr);
+        Jvm.interop_free(argsPtr);
         
         foreach (var strArg in argList.Where(a => a.Typing.ObjectType == JavaObjType.String))
         {
@@ -300,10 +317,10 @@ public class JavaObject : DynamicObject, IDisposable
     }
     
     
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "_java_get_field_id_by_class")]
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_get_field_id_by_class")]
     private static extern IntPtr get_prop_field(IntPtr env, IntPtr cls, string name, JavaFullType type);
     
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "_java_get_object_property")]
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_get_object_property")]
     private static extern JavaTypedVal get_prop(IntPtr env, IntPtr obj, IntPtr field, JavaFullType type);
 
     private T GetProp<T>(string prop, JavaFullType type)
@@ -341,7 +358,7 @@ public class JavaObject : DynamicObject, IDisposable
     //     set => Set(key, value);
     // }
 
-    [DllImport("Clib/cmake-build-debug/libMud.dylib", CharSet = CharSet.Auto, EntryPoint = "_java_release_object")]
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_release_object")]
     private static extern void release_obj(IntPtr env, IntPtr obj);
     public void Dispose()
     {

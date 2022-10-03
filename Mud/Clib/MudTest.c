@@ -3,10 +3,10 @@
 // Created by Nicholas Homme on 6/19/22.
 //
 int main(int argc, char **argv) {
-  char* jvmArgs = "-Djava.class.path=/Users/nicholas/Documents/ct400/java/jt400.jar:/Users/nicholas/Documents/ct400/java";
-  Java_JVM_Instance jvm = _java_jvm_create_instance(jvmArgs);
+  JavaVMOption* options = _java_jvm_options_va(1, "-Djava.class.path=/Users/nicholas/Documents/ct400/java/jt400.jar:/Users/nicholas/Documents/ct400/java");
+  Java_JVM_Instance jvm = _java_jvm_create_instance(options, 1);
 
-  jobject obj = _java_build_class_object(jvm.env, "MyTest");
+  jobject obj = _java_build_class_object(jvm.env, "MyTest", null);
   Java_Args* args3 = _java_args_new_ptr(1);
   Java_Args args = _java_args_new(1);
 //  _java_args_add(&args, _java_arg_new_string("Howdy123"));

@@ -15,17 +15,56 @@ jthrowable _java_jvm_check_exception(JNIEnv* env) {
   return ex;
 }
 
-Java_JVM_Instance _java_jvm_create_instance(const char* args) {
-  char* argsCpy = (char*) malloc(sizeof(char) * (strlen(args) + 1));
-  strcpy(argsCpy, args);
+
+JavaVMOption* _java_jvm_options(size_t amnt) {
+  return malloc(sizeof(JavaVMOption) * amnt);
+}
+
+JavaVMOption* _java_jvm_options_va(size_t amnt, ...) {
+  JavaVMOption* options = _java_jvm_options(amnt);
+  va_list argsList;
+  va_start(argsList, amnt);
+  for (size_t i = 0; i < amnt; i++) {
+    char* arg = va_arg(argsList, char*);
+    size_t len = strlen(arg);
+    options[i].optionString = malloc(sizeof(char) * len + 1);
+    strcpy(options[i].optionString, arg);
+  }
+  va_end(argsList);
+  return options;
+}
+
+JavaVMOption* _java_jvm_options_str_arr(size_t amnt, const char** optionArgs) {
+  JavaVMOption* options = _java_jvm_options(amnt);
+  for (size_t i = 0; i < amnt; i++) {
+    const char* arg = optionArgs[i];
+    size_t len = strlen(arg);
+    options[i].optionString = malloc(sizeof(char) * len + 1);
+    strcpy(options[i].optionString, arg);
+  }
+  return options;
+}
+
+Java_JVM_Instance _java_jvm_create_instance(JavaVMOption* options, int optionsAmnt) {
+//  printf("Creating JVMdd with args: %s\n", args);
+//  const size_t argsLen = strlen(args);
+//  char* argsCpy = (char*) malloc(sizeof(char) * (argsLen + 1));
+//  strcpy(argsCpy, args);
   Java_JVM_Instance instance = {.env = malloc(sizeof(JNIEnv)), .jvm = malloc(sizeof(JavaVM))};
 //================== prepare loading of Java VM ============================
   JavaVMInitArgs vm_args;                        // Initialization arguments
-  JavaVMOption options[1] = {{.optionString = argsCpy}};   // JVM invocation options
+  vm_args.options = options;
+  vm_args.nOptions = optionsAmnt;                          // number of options
+
+  printf("Creating JVMdd with args:\n");
+  for (int i = 0; i < optionsAmnt; ++i) {
+    printf("\t%s\n", options[i].optionString);
+  }
+
+
 //  options[0].optionString = args;   // where to find java .cls
   vm_args.version = JNI_VERSION_1_6;             // minimum Java version
-  vm_args.nOptions = 1;                          // number of options
-  vm_args.options = options;
+
 //  vm_args.ignoreUnrecognized = static_cast<jboolean>(false);     // invalid options make the JVM init fail
   vm_args.ignoreUnrecognized = false;
   //=============== load and initialize Java VM and JNI interface =============
@@ -47,6 +86,27 @@ Java_JVM_Instance _java_jvm_create_instance(const char* args) {
 //  std::cout << ((ver >> 16) & 0x0f) << "." << (ver & 0x0f) << std::endl;
   return instance;
 }
+
+void _java_add_class_path(JNIEnv* env, const char* path) {
+//  char urlPath[2048];
+//  sprintf(urlPath, "file://%s", path);
+  printf("Adding %s to the classpath\n", path);
+
+  jclass classLoaderCls = _java_get_class(env, "java/lang/ClassLoader");
+  jclass urlClassLoaderCls = _java_get_class(env, "java/net/URLClassLoader");
+  jclass urlCls = _java_get_class(env, "java/net/URL");
+
+  jmethodID getSystemClassLoaderMethod = (*env)->GetStaticMethodID(env, classLoaderCls, "getSystemClassLoader", "()Ljava/lang/ClassLoader;");
+  jobject classLoaderInstance = (*env)->CallStaticObjectMethod(env, classLoaderCls, getSystemClassLoaderMethod);
+  jmethodID addUrlMethod = (*env)->GetMethodID(env, urlClassLoaderCls, "addURL", "(Ljava/net/URL;)V");
+  jmethodID urlConstructor = (*env)->GetMethodID(env, urlCls, "<init>", "(Ljava/lang/String;)V");
+  jstring urlPathStrObj = (*env)->NewStringUTF(env,  path);
+  jobject urlInstance = (*env)->NewObject(env, urlCls, urlConstructor, urlPathStrObj);
+  (*env)->CallVoidMethod(env, classLoaderInstance, addUrlMethod, urlInstance);
+//  _java_string_release(env, urlPathStrObj, urlPath);
+  printf("Added %s to the classpath\n", path);
+}
+
 jclass _java_get_class(JNIEnv* env, const char* className) {
   jclass cls = (*env)->FindClass(env, className);
   if (!cls) {
@@ -72,10 +132,11 @@ Java_Typed_Val _java_call_method(JNIEnv* env,
                                  Java_Full_Type returnType,
                                  Java_Args* args) {
   jclass cls = (*env)->GetObjectClass(env, obj);
+
   const char* methodTyping = _java_method_typing_string(returnType, args);
   jmethodID mid = (*env)->GetMethodID(env, cls, methodName, methodTyping);  // find method
   if (!mid) {
-    printf("Method not found: %s%s\n", methodName, methodTyping);
+    printf("Method not found: %s %s\n", methodName, methodTyping);
     exit(1);
   }
   safe_free(methodTyping);
@@ -140,7 +201,7 @@ Java_Typed_Val _java_call_static_method(JNIEnv* env,
   const char* methodTyping = _java_method_typing_string(returnType, args);
   jmethodID mid = (*env)->GetStaticMethodID(env, cls, methodName, methodTyping);  // find method
   if (!mid) {
-    printf("ERROR: method void %s() not found !\n", methodName);
+    printf("ERROR: method `%s`::`%s` not found !\n", methodName, methodTyping);
     exit(1);
   }
   safe_free(methodTyping);
@@ -208,13 +269,29 @@ Java_Typed_Val _java_call_static_method(JNIEnv* env,
 void _java_release_object(JNIEnv* env, jobject obj) {
   (*env)->DeleteLocalRef(env, obj);
 }
-jobject _java_build_object(JNIEnv* env, jclass cls) {
-  jmethodID ctor = (*env)->GetMethodID(env, cls, "<init>", "()V");  // FIND AN OBJECT CONSTRUCTOR
+jobject _java_build_object(JNIEnv* env, jclass cls, Java_Args* args) {
+  char* argsStr = _java_args_to_args_type(args);
+
+  size_t argsStrLen = strlen(argsStr);
+  argsStr = realloc(argsStr, argsStrLen + 2);
+  argsStr[argsStrLen] = 'V';
+  argsStr[argsStrLen + 1] = '\0';
+  printf("Looking for ctor with args: %s\n", argsStr);
+  jmethodID ctor = (*env)->GetMethodID(env, cls, "<init>", argsStr);  // FIND AN OBJECT CONSTRUCTOR
   if (!ctor) {
-    printf("ERROR: constructor not found !\n");
+    printf("ERROR: constructor not found matching: %s !\n", argsStr);
+    free(argsStr);
     return NULL;
   }
-  return (*env)->NewObject(env, cls, ctor);
+  free(argsStr);
+//  printf("Found ctor: %p\n", ctor);
+  if (!args) {
+    return (*env)->NewObject(env, cls, ctor);
+  }
+  const jvalue* ctorArgs = _java_args_to_method_args(env, args);
+  jobject obj = (*env)->NewObjectA(env, cls, ctor, ctorArgs);
+  _java_release_method_args(env, ctorArgs, args);
+  return obj;
 }
 
 void _java_jvm_destroy_instance(JavaVM* jvm) {
@@ -255,11 +332,10 @@ Java_Typed_Val _java_call_static_method_named_varargs(JNIEnv* env,
   return _java_call_static_method_varargs(env,
                                           cls, (methodName), (returnType), argAmnt, args);
 }
-jobject _java_build_class_object(JNIEnv* env, const char* className) {
+jobject _java_build_class_object(JNIEnv* env, const char* className, Java_Args* args) {
   jclass
       cls = _java_get_class(env, className);
-  return _java_build_object(env,
-                            cls);
+  return _java_build_object(env, cls, args);
 //  return NULL;
 }
 jfieldID _java_get_field_id(JNIEnv* env, const char* cls, const char* field, Java_Full_Type type) {
@@ -375,3 +451,16 @@ void _java_release_method_args(JNIEnv* env, const jvalue* methodArgs, Java_Args*
 
   }
 }
+
+//Java_Typed_Val _java_call_method_manual(JNIEnv* env,
+//                                        jobject obj,
+//                                        jclass class,
+//                                        const char* methodName,
+//                                        const char* methodTyping) {
+//  jmethodID method = (*env)->GetMethodID(env, class, methodName, types);
+//  jclass urlCls = env->FindClass("java/net/URL");
+//  jmethodID urlConstructor = env->GetMethodID(urlCls, "<init>", "(Ljava/lang/String;)V");
+//  jobject urlInstance = env->NewObject(urlCls, urlConstructor, env->NewStringUTF(urlPath.c_str()));
+//  env->CallVoidMethod(classLoaderInstance, addUrlMethod, urlInstance);
+//  std::cout << "Added " << urlPath << " to the classpath." << std::endl;
+//}

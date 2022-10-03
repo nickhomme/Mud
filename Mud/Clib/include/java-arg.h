@@ -359,7 +359,14 @@ static const char * _java_get_obj_type_string(Java_Full_Type typeData) {
   return str;
 }
 
-static const char * _java_args_to_args_type(Java_Args* args) {
+static char * _java_args_to_args_type(Java_Args* args) {
+  if (!args) {
+    char* str = malloc(sizeof(char) * 3);
+    str[0] = '(';
+    str[1] = ')';
+    str[2] = '\0';
+    return str;
+  }
 
   char* str = malloc(sizeof(char) + 2048);
   memset(str, '\0', sizeof(char) + 2048);
