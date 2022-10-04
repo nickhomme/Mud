@@ -260,28 +260,19 @@ Java_Typed_Val _java_call_static_method(JNIEnv* env,
 void _java_release_object(JNIEnv* env, jobject obj) {
   (*env)->DeleteLocalRef(env, obj);
 }
-jobject _java_build_object(JNIEnv* env, jclass cls, Java_Args* args) {
-  char* argsStr = _java_args_to_args_type(args);
+jobject _java_build_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args) {
 
-  size_t argsStrLen = strlen(argsStr);
-  argsStr = realloc(argsStr, argsStrLen + 2);
-  argsStr[argsStrLen] = 'V';
-  argsStr[argsStrLen + 1] = '\0';
-  printf("Looking for ctor with args: %s\n", argsStr);
-  jmethodID ctor = (*env)->GetMethodID(env, cls, "<init>", argsStr);  // FIND AN OBJECT CONSTRUCTOR
+
+  jmethodID ctor = (*env)->GetMethodID(env, cls, "<init>", signature);  // FIND AN OBJECT CONSTRUCTOR
   if (!ctor) {
-    printf("ERROR: constructor not found matching: %s !\n", argsStr);
-    free(argsStr);
+    printf("ERROR: constructor not found matching: %s !\n", signature);
     return NULL;
   }
-  free(argsStr);
 //  printf("Found ctor: %p\n", ctor);
   if (!args) {
     return (*env)->NewObject(env, cls, ctor);
   }
-  const jvalue* ctorArgs = _java_args_to_method_args(env, args);
-  jobject obj = (*env)->NewObjectA(env, cls, ctor, ctorArgs);
-  _java_release_method_args(env, ctorArgs, args);
+  jobject obj = (*env)->NewObjectA(env, cls, ctor, args);
   return obj;
 }
 
@@ -323,12 +314,7 @@ Java_Typed_Val _java_call_static_method_named_varargs(JNIEnv* env,
   return _java_call_static_method_varargs(env,
                                           cls, (methodName), (returnType), argAmnt, args);
 }
-jobject _java_build_class_object(JNIEnv* env, const char* className, Java_Args* args) {
-  jclass
-      cls = mud_get_class(env, className);
-  return _java_build_object(env, cls, args);
-//  return NULL;
-}
+
 jfieldID _java_get_field_id(JNIEnv* env, const char* cls, const char* field, Java_Full_Type type) {
   jclass javaClass = mud_get_class(env,
                                      cls);
@@ -340,77 +326,8 @@ jfieldID _java_get_field_id(JNIEnv* env, const char* cls, const char* field, Jav
   }
   return jfieldId;
 }
-jfieldID _java_get_field_id_by_class(JNIEnv* env, jclass cls, const char* field, Java_Full_Type type) {
-  const char* typeStr = _java_get_obj_type_string(type);
-  jfieldID jfieldId = (*env)->GetFieldID(env, cls, field, typeStr);
-  if (type.object_type == Java_Object_Custom) {
-    safe_free(typeStr);
-  }
-  return jfieldId;
-}
-Java_Typed_Val _java_get_object_property(JNIEnv* env, jobject object, jfieldID field, Java_Full_Type type) {
-  Java_Val result;
-  switch (type.type) {
-    case Java_Int: {
-      result.int_val = (*env)->GetIntField(env, object, field);
-      break;
-    }
-    case Java_Bool: {
-      result.bool_val = (*env)->GetBooleanField(env, object, field);
-      break;
-    }
-    case Java_Byte: {
-      result.byte_val = (*env)->GetByteField(env, object, field);
-      break;
-    }
-    case Java_Char: {
-      result.char_val = (*env)->GetCharField(env, object, field);
-      break;
-    }
-    case Java_Short: {
-      result.short_val = (*env)->GetShortField(env, object, field);
-      break;
-    }
-    case Java_Long: {
-      result.long_val = (*env)->GetLongField(env, object, field);
-      break;
-    }
-    case Java_Float: {
-      result.float_val = (*env)->GetFloatField(env, object, field);
-      break;
-    }
-    case Java_Double: {
-      result.double_val = (*env)->GetDoubleField(env, object, field);
-      break;
-    }
-    case Java_Object: {
-      result.obj_val = (*env)->GetObjectField(env, object, field);
-      break;
-    }
-    case Java_Void:
-      break;
-  }
 
-  if (type.object_type == Java_Object_String) {
-    jstring resultStr = ((jstring) result.obj_val);
-    result.string_val.jstring = resultStr;
-    result.string_val.char_ptr = _java_jstring_to_string(env, resultStr);
-  }
 
-  return (Java_Typed_Val) {
-      .type = type,
-      .val = result
-  };
-}
-Java_Typed_Val _java_get_object_property_by_name(JNIEnv* env, jobject object, const char* field, Java_Full_Type type) {
-  jclass cls = mud_get_class_of_obj(env, object);
-  const char* typeStr = _java_get_obj_type_string(type);
-  jfieldID fieldId = (*env)->GetFieldID(env, cls, field, typeStr);
-  if (type.object_type == Java_Object_Custom) {
-    safe_free(typeStr);
-  }
-  return _java_get_object_property(env, object, fieldId, type);
-}
 void _java_args_add(Java_Args* args, Java_Typed_Val arg) {
   args->args[args->current_arg] = arg;
   args->current_arg++;
@@ -468,3 +385,48 @@ struct Java_String_Resp _java_string_new(JNIEnv *env, const char* msg) {
 }
 
 
+
+
+
+jmethodID mud_get_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature) {
+  return (*env)->GetMethodID(env, cls,
+                             methodName,
+                             signature);
+}
+
+jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature) {
+  return (*env)->GetStaticMethodID(env, cls,
+                                   methodName,
+                                   signature);
+}
+
+struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type) {
+  struct JavaCallResp_S result;
+  return mud_call_handler(env, obj, method, args, type, true);
+}
+
+struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type) {
+  return mud_call_handler(env, obj, method, args, type, false);
+}
+
+char* mud_jstring_to_string(JNIEnv* env, jstring jstr) {
+
+  const char* backingStr = _java_jstring_to_string(env, jstr);
+  const size_t len = strlen(backingStr);
+  char* copyStr = malloc(sizeof(char) * (len + 1));
+  memcpy(copyStr, backingStr, len);
+  copyStr[len] = '\0';
+  (*env)->ReleaseStringUTFChars(env, jstr, backingStr);
+  return copyStr;
+}
+
+jfieldID mud_get_field_id(JNIEnv* env, jclass cls, const char* field, const char* signature) {
+  return (*env)->GetFieldID(env, cls, field, signature);
+}
+
+jvalue mud_get_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type) {
+  return mud_field_handler(env, cls, field, type, false);
+}
+jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_Type type) {
+  return mud_field_handler(env, cls, field, type, true);
+}

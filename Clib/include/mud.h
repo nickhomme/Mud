@@ -163,7 +163,7 @@ static char* _java_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCa
                                        getCauseMethod,
                                        getStackMethod,
                                        exToStringMethod,
-                                       frameToStringMethod);
+                                       frameToStringMethod, false);
       const size_t subFrameMsgLen = strlen(subFrameMsg);
       memcpy(msg + (sizeof(char) * len), subFrameMsg, subFrameMsgLen);
       len += subFrameMsgLen;
@@ -220,8 +220,7 @@ Java_Typed_Val _java_call_static_method_named_varargs(JNIEnv* env,
                                                       int argAmnt,
                                                       Java_Typed_Val* args);
 
-jobject _java_build_object(JNIEnv* env, jclass cls, Java_Args* args);
-jobject _java_build_class_object(JNIEnv* env, const char* className, Java_Args* args);
+jobject _java_build_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args);
 
 jfieldID _java_get_field_id(JNIEnv* env, const char* cls, const char* field, Java_Full_Type type);
 
@@ -232,17 +231,8 @@ Java_Typed_Val _java_get_object_property(JNIEnv* env, jobject object, jfieldID f
 Java_Typed_Val _java_get_object_property_by_name(JNIEnv* env, jobject object, const char* field, Java_Full_Type type);
 
 
-static jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature) {
-  return (*env)->GetStaticMethodID(env, cls,
-                             methodName,
-                             signature);
-}
-
-static jmethodID mud_get_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature) {
-  return (*env)->GetMethodID(env, cls,
-                             methodName,
-                           signature);
-}
+jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature);
+jmethodID mud_get_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature);
 
 
 
@@ -277,7 +267,6 @@ static struct JavaCallResp_S map_call_result(JNIEnv* env, Java_Type type, ptr va
   return result;
 }
 
-
 static struct JavaCallResp_S mud_call_handler(JNIEnv* env, ptr objOrCls, jmethodID method, const jvalue* args, Java_Type type, bool isStatic) {
 #define call(name) (isStatic ? (*env)->CallStatic##name##MethodA : (*env)->Call##name##MethodA)(env, objOrCls, method, args)
 #define retCallMap(name, jtype) jtype val = call(name); return map_call_result(env, type, &val);
@@ -308,13 +297,9 @@ static struct JavaCallResp_S mud_call_handler(JNIEnv* env, ptr objOrCls, jmethod
 
 }
 
-static struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type) {
-  struct JavaCallResp_S result;
-  return mud_call_handler(env, obj, method, args, type, true);
-}
-static struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type) {
-  return mud_call_handler(env, obj, method, args, type, false);
-}
+struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type);
+
+struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type);
 
 static struct JavaCallResp_S mud_call_method_by_name(JNIEnv* env, jclass cls, const char* methodName, const char* signature, const jvalue* args, Java_Type type) {
 
@@ -327,15 +312,39 @@ static struct JavaCallResp_S mud_call_static_method_by_name(JNIEnv* env, jclass 
 }
 
 
-static char* mud_jstring_to_string(JNIEnv* env, jstring jstr) {
+char* mud_jstring_to_string(JNIEnv* env, jstring jstr);
 
-  const char* backingStr = _java_jstring_to_string(env, jstr);
-  const size_t len = strlen(backingStr);
-  char* copyStr = malloc(sizeof(char) * (len + 1));
-  memcpy(copyStr, backingStr, len);
-  copyStr[len] = '\0';
-  (*env)->ReleaseStringUTFChars(env, jstr, backingStr);
-  return copyStr;
+jfieldID mud_get_field_id(JNIEnv* env, jclass cls, const char* field, const char* signature);
+
+static jvalue mud_field_handler(JNIEnv* env, ptr objOrCls, jfieldID field, Java_Type type, bool isStatic) {
+#define get(name) (isStatic ? (*env)->GetStatic##name##Field : (*env)->Get##name##Field)(env, objOrCls, field)
+#define retGetMap(name, jtype) return (jvalue) get(name);
+  struct JavaCallResp_S result;
+
+  if (type == Java_Bool) {
+    retGetMap(Boolean, jboolean)
+  } else if (type == Java_Int) {
+    retGetMap(Int, jint)
+  } else if (type == Java_Long) {
+    retGetMap(Long, jlong)
+  } else if (type == Java_Byte) {
+    retGetMap(Byte, jbyte)
+  } else if (type == Java_Char) {
+    retGetMap(Char, jchar)
+  } else if (type == Java_Short) {
+    retGetMap(Short, jshort)
+  } else if (type == Java_Float) {
+    retGetMap(Float, jfloat)
+  } else if (type == Java_Double) {
+    retGetMap(Double, jdouble)
+  } else {
+    retGetMap(Object, jobject)
+  }
+
 }
+
+
+jvalue mud_get_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type);
+jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_Type type);
 
 #endif //MUD_LIBRARY_H
