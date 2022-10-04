@@ -13,13 +13,13 @@ public enum JavaType
     Object,
     Void
 }
-
-
-public enum JavaObjType
-{
-    String = 1,
-    Class,
-    Throwable,
-    Array,
-    Custom
-}
+//
+//
+// public enum JavaObjType
+// {
+//     String = 1,
+//     Class,
+//     Throwable,
+//     Array,
+//     Custom
+// }

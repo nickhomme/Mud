@@ -4,16 +4,7 @@
 void _java_release_method_args(JNIEnv* env, const jvalue* methodArgs, Java_Args* args);
 jvalue *_java_args_to_method_args(JNIEnv *env, Java_Args* args);
 
-jthrowable _java_jvm_check_exception(JNIEnv* env) {
-  if (!(*env)->ExceptionCheck(env)) {
-    return null;
-  }
-  printf("[Exception]:\n");
-  (*env)->ExceptionDescribe(env);
-  jthrowable ex = (*env)->ExceptionOccurred(env);
-  (*env)->ExceptionClear(env);
-  return ex;
-}
+
 
 
 JavaVMOption* _java_jvm_options(size_t amnt) {
@@ -92,9 +83,9 @@ void _java_add_class_path(JNIEnv* env, const char* path) {
 //  sprintf(urlPath, "file://%s", path);
   printf("Adding %s to the classpath\n", path);
 
-  jclass classLoaderCls = _java_get_class(env, "java/lang/ClassLoader");
-  jclass urlClassLoaderCls = _java_get_class(env, "java/net/URLClassLoader");
-  jclass urlCls = _java_get_class(env, "java/net/URL");
+  jclass classLoaderCls = mud_get_class(env, "java/lang/ClassLoader");
+  jclass urlClassLoaderCls = mud_get_class(env, "java/net/URLClassLoader");
+  jclass urlCls = mud_get_class(env, "java/net/URL");
 
   jmethodID getSystemClassLoaderMethod = (*env)->GetStaticMethodID(env, classLoaderCls, "getSystemClassLoader", "()Ljava/lang/ClassLoader;");
   jobject classLoaderInstance = (*env)->CallStaticObjectMethod(env, classLoaderCls, getSystemClassLoaderMethod);
@@ -107,7 +98,7 @@ void _java_add_class_path(JNIEnv* env, const char* path) {
   printf("Added %s to the classpath\n", path);
 }
 
-jclass _java_get_class(JNIEnv* env, const char* className) {
+jclass mud_get_class(JNIEnv* env, const char* className) {
   jclass cls = (*env)->FindClass(env, className);
   if (!cls) {
     printf("Error: Class %s not found\n", className);
@@ -308,7 +299,7 @@ Java_Args* _java_args_new_ptr(int argAmnt) {
   memcpy(argsPtr, &args, sizeof(Java_Args));
   return argsPtr;
 }
-jclass _java_get_obj_class(JNIEnv* env, jobject obj) {
+jclass mud_get_class_of_obj(JNIEnv* env, jobject obj) {
   return (*env)->GetObjectClass(env, obj);
 }
 Java_Typed_Val _java_call_static_method_named(JNIEnv* env,
@@ -317,7 +308,7 @@ Java_Typed_Val _java_call_static_method_named(JNIEnv* env,
                                               Java_Full_Type returnType,
                                               Java_Args* args) {
   jclass
-      cls = _java_get_class(env, className);
+      cls = mud_get_class(env, className);
   return _java_call_static_method(env,
                                   cls, methodName, returnType, args);
 }
@@ -328,18 +319,18 @@ Java_Typed_Val _java_call_static_method_named_varargs(JNIEnv* env,
                                                       int argAmnt,
                                                       Java_Typed_Val* args) {
   jclass
-      cls = _java_get_class(env, className);
+      cls = mud_get_class(env, className);
   return _java_call_static_method_varargs(env,
                                           cls, (methodName), (returnType), argAmnt, args);
 }
 jobject _java_build_class_object(JNIEnv* env, const char* className, Java_Args* args) {
   jclass
-      cls = _java_get_class(env, className);
+      cls = mud_get_class(env, className);
   return _java_build_object(env, cls, args);
 //  return NULL;
 }
 jfieldID _java_get_field_id(JNIEnv* env, const char* cls, const char* field, Java_Full_Type type) {
-  jclass javaClass = _java_get_class(env,
+  jclass javaClass = mud_get_class(env,
                                      cls);
   const char* typeStr = _java_get_obj_type_string(type);
   jfieldID jfieldId = (*env)->GetFieldID(env, javaClass, field, typeStr);
@@ -412,7 +403,7 @@ Java_Typed_Val _java_get_object_property(JNIEnv* env, jobject object, jfieldID f
   };
 }
 Java_Typed_Val _java_get_object_property_by_name(JNIEnv* env, jobject object, const char* field, Java_Full_Type type) {
-  jclass cls = _java_get_obj_class(env, object);
+  jclass cls = mud_get_class_of_obj(env, object);
   const char* typeStr = _java_get_obj_type_string(type);
   jfieldID fieldId = (*env)->GetFieldID(env, cls, field, typeStr);
   if (type.object_type == Java_Object_Custom) {
@@ -464,3 +455,16 @@ void _java_release_method_args(JNIEnv* env, const jvalue* methodArgs, Java_Args*
 //  env->CallVoidMethod(classLoaderInstance, addUrlMethod, urlInstance);
 //  std::cout << "Added " << urlPath << " to the classpath." << std::endl;
 //}
+
+struct Java_String_Resp _java_string_new(JNIEnv *env, const char* msg) {
+  const size_t strLen = strlen(msg);
+  char* newStr = malloc(sizeof(char) * strLen + 1);
+  memcpy(newStr, msg, sizeof(char) * strLen);
+  newStr[strLen] = '\0';
+  return (struct Java_String_Resp) {
+      .java_ptr = (*env)->NewStringUTF(env, msg),
+      .char_ptr = newStr
+  };
+}
+
+

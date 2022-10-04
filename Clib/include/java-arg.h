@@ -107,7 +107,8 @@ static Java_Full_Type _java_type(Java_Type dataType) {
   return type;
 }
 
-static jstring _java_string_new(JNIEnv *env, const char* msg) {
+
+static jstring _java_string_new_managed(JNIEnv *env, const char* msg) {
   return (*env)->NewStringUTF(env, msg);
 }
 
@@ -291,7 +292,7 @@ static jvalue _java_args_to_method_arg_to_jvalue(JNIEnv *env, Java_Typed_Val arg
   if (arg.type.type == Java_Object) {
     switch (arg.type.object_type) {
       case Java_Object_String: {
-        val.l = _java_string_new(env, arg.val.string_val.char_ptr);
+        val.l = _java_string_new_managed(env, arg.val.string_val.char_ptr);
         break;
       }
       case Java_Object_Class: {

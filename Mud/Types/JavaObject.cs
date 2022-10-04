@@ -21,65 +21,90 @@ public class ClassPathAttribute : Attribute
 // [ClassPath("Java.Lang.Object")]
 public class JavaObject : DynamicObject, IDisposable
 {
-    internal string ClassPath { get; set; }
     internal IntPtr Env { get; set; }
-    internal IntPtr Jobj { get; set; }
-    internal IntPtr Jclass { get; set; }
+    private IntPtr Jobj { get; set; }
+    internal Jvm Jvm { get; set; }
+    internal ClassInfo Info { get; set; }
 
-
-    public JavaObject() {}
-    
-    internal JavaObject(IntPtr env, string classPath, IntPtr jClass, IntPtr jObj)
+    internal void SetObj(IntPtr obj)
     {
-        Env = env;
-        ClassPath = classPath;
-        Jobj = jObj;
-        Jclass = jClass;
+        Jobj = obj;
+    }
+    public void Bind(params object[] args)
+    {
+        Jvm.UsingArgs(args, jArgs =>
+        {
+            Jobj = build_obj(Jvm.Instance.Jvm, Info.Cls, jArgs);
+        });
     }
     
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_build_class_object")]
     internal static extern IntPtr build_obj_by_path(IntPtr env, string classPath);
     
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_build_object")]
-    internal static extern IntPtr build_obj(IntPtr env, IntPtr jClass, IntPtr args);
+    internal static extern IntPtr build_obj(IntPtr env, IntPtr jClass, JavaArg[] args);
     
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_get_class")]
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_class")]
     internal static extern IntPtr get_class(IntPtr env, string classPath);
+    
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_class_of_obj")]
+    internal static extern IntPtr get_class_of_obj(IntPtr env, IntPtr obj);
+    
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_method")]
+    internal static extern IntPtr get_method(IntPtr env, IntPtr cls, string methodName, string signature);
+    
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_static_method")]
+    internal static extern IntPtr get_static_method(IntPtr env, IntPtr cls, string methodName, string signature);
     
     private Dictionary<string, IntPtr> PropFields { get; } = new();
     
-    internal JavaObject(IntPtr env, string classPath, IntPtr jClass, params object[] args)
+    internal static string GenSignature(JavaFullType val)
     {
-        Env = env;
-        ClassPath = classPath;
-        Jclass = jClass;
-        var argsPtr = new_args(args.Length);
-        var argList = args.Select(JavaObject.MapToVal).ToList();
-        foreach (var arg in argList)
+        switch (val.Type)
         {
-            args_add(argsPtr, arg);
+            case JavaType.Int:
+                return "I";
+            case JavaType.Bool:
+                return "Z";
+            case JavaType.Byte:
+                return "B";
+            case JavaType.Char:
+                return "C";
+            case JavaType.Short:
+                return "S";
+            case JavaType.Long:
+                return "L";
+            case JavaType.Float:
+                return "F";
+            case JavaType.Double:
+                return "D";
+            case JavaType.Object:
+                if (val.ArrayType != null)
+                {
+                    return $"[{GenSignature(val.ArrayType)}";
+                }
+                return $"L{val.CustomType!}";
+            case JavaType.Void:
+                return "V";
+            default:
+                throw new ArgumentOutOfRangeException();
         }
-        Jobj = build_obj(env, jClass, argsPtr);
-        Jvm.interop_free(argsPtr);
+    }
+
+    internal static string GenSignature(Type type) => GenSignature(MapToType(type));
+
+    internal static string GenSignature(object val) => GenSignature(val.GetType());
+
+    internal static string GenMethodSignature(Type returnType, params Type[] args)
+    {
+        return $"({string.Join("", args.Select(GenSignature))}){MapToType(returnType)}";
+    }
+    internal static string GenMethodSignature(Type returnType, params object[] args)
+    {
+        return $"({string.Join("", args.Select(GenSignature))}){MapToType(returnType)}";
     }
     
-    internal JavaObject(IntPtr env, string classPath, params object[] args)
-    {
-        Env = env;
-        ClassPath = classPath;
-        Jclass = get_class(env, classPath);
-        var argsPtr = new_args(args.Length);
-        var argList = args.Select(JavaObject.MapToVal).ToList();
-        foreach (var arg in argList)
-        {
-            args_add(argsPtr, arg);
-        }
-        Jobj = build_obj(env, Jclass, argsPtr);
-        Jvm.interop_free(argsPtr);
-    }
-
-
-
+    
     internal static JavaFullType MapToType(Type type)
     {
         if (type == typeof(int))
@@ -102,7 +127,7 @@ public class JavaObject : DynamicObject, IDisposable
         {
             return new(JavaType.Double);
         }
-        if (type == typeof(double))
+        if (type == typeof(double) || type == typeof(decimal))
         {
             return new(JavaType.Double);
         }
@@ -114,183 +139,42 @@ public class JavaObject : DynamicObject, IDisposable
         {
             return new(JavaType.Long);
         }
-        if (type == typeof(string))
-        {
-            return new(JavaObjType.String);
-        }
         
-        if (type.IsAssignableTo(typeof(JavaObject)))
+        if (type == typeof(string) || type.IsAssignableTo(typeof(JavaObject)) || type == typeof(IntPtr))
         {
-            return new(JavaObjType.Custom)
-            {
-                CustomType = type.GetCustomAttribute<ClassPathAttribute>()!.ClassPath
-            };
-        }
-        if (type == typeof(IntPtr))
-        {
-            return new(JavaObjType.Class);
+            return new(JavaType.Object);
         }
 
         throw new ConstraintException($"Cannot determine java type for class: {type.FullName ?? type.Name} ");
     }
     
-    internal static JavaTypedVal MapToVal(object? val)
-    {
-        var javaVal = new JavaVal();
-        JavaType type = 0;
-        JavaObjType objType = 0;
-        string? customType = null;
-        switch (val)
-        {
-            case decimal v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Double;
-                break;
-            case double v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Double;
-                break;
-            case string v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Object;
-                objType = JavaObjType.String;
-                break;
-            case int v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Int;
-                break;
-            case byte v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Byte;
-                break;
-            case bool v:
-                #if !NET7_0_OR_GREATER
-                javaVal = new JavaVal(v ? byte.One : byte.Zero);
-                #else
-                javaVal = new JavaVal((byte)(v ? 1: 0));
-                #endif
-                type = JavaType.Bool;
-                break;
-            case char v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Char;
-                break;
-            case long v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Long;
-                break;
-            case short v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Short;
-                break;
-            case float v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Float;
-                break;
-            case JavaObject v:
-                javaVal = new JavaVal(v.Jobj);
-                type = JavaType.Object;
-                objType = JavaObjType.Custom;
-                customType = v.ClassPath;
-                break;
-            case IntPtr v:
-                javaVal = new JavaVal(v);
-                type = JavaType.Object;
-                objType = JavaObjType.Class;
-                break;
-            case JavaTypedVal v:
-                return v;
-            case Enum v:
-                javaVal = new JavaVal(Convert.ToInt32(v));
-                type = JavaType.Int;
-                break;
-            default:
-                throw new ConstraintException($"Cannot determine java type for val: {val?.GetType()?.Name ?? "null"} ");
-        }
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_method_by_name")]
+    internal static extern JavaCallResp call_method(IntPtr env, IntPtr obj, string method, string signature, [In, Out] JavaArg[] args, JavaType type);
+    
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_method")]
+    internal static extern JavaCallResp call_method(IntPtr env, IntPtr obj, IntPtr method, [In, Out] JavaArg[] args, JavaType type);
+    
+    internal static JavaCallResp call_method(IntPtr env, IntPtr obj, IntPtr method, JavaType type) =>
+        call_method(env, obj, method, Array.Empty<JavaArg>(), type);
+    
+    internal static JavaCallResp call_method(IntPtr env, IntPtr cls, string method, string signature, JavaType type) =>
+        call_method(env, cls, method, signature, Array.Empty<JavaArg>(), type);
+    
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_static_method")]
+    internal static extern JavaCallResp call_static_method(IntPtr env, IntPtr cls, IntPtr method, [In, Out] JavaArg[] args, JavaType type);
+    
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_static_method_by_name")]
+    internal static extern JavaCallResp call_static_method(IntPtr env, IntPtr cls, string method, string signature, [In, Out] JavaArg[] args, JavaType type);
 
-
-        return new JavaTypedVal
-        {
-            Typing = new JavaFullType(type, objType)
-            {
-                CustomType = customType
-            },
-            Val = javaVal
-        };
-    }
+    internal static JavaCallResp call_static_method(IntPtr env, IntPtr cls, string method, string signature, JavaType type) =>
+        call_static_method(env, cls, method, signature, Array.Empty<JavaArg>(), type);
     
-    internal static object MapVal(IntPtr env, JavaTypedVal typedVal)
-    {
-        object val;
-        switch (typedVal.Typing.Type)
-        {
-            case JavaType.Int:
-                val = typedVal.Val.IntVal;
-                break;
-            case JavaType.Bool:
-                val = typedVal.Val.BoolVal == 1;
-                break;
-            case JavaType.Byte:
-                val = typedVal.Val.ByteVal;
-                break;
-            case JavaType.Char:
-                val = typedVal.Val.CharVal;
-                break;
-            case JavaType.Short:
-                val = typedVal.Val.ShortVal;
-                break;
-            case JavaType.Long:
-                val = typedVal.Val.LongVal;
-                break;
-            case JavaType.Float:
-                val = typedVal.Val.FloatVal;
-                break;
-            case JavaType.Double:
-                val = typedVal.Val.DoubleVal;
-                break;
-            case JavaType.Object:
-                switch (typedVal.Typing.ObjectType)
-                {
-                    case JavaObjType.String:
-                        val = typedVal.Val.StringVal.Val!;
-                        Jvm.string_release(env, typedVal.Val.StringVal.JavaString, typedVal.Val.StringVal.CharPtr);
-                        break;
-                    case JavaObjType.Throwable:
-                        throw new Exception(typedVal.Val.StringVal.Val);
-                    case JavaObjType.Class:
-                    case JavaObjType.Custom:
-                        val = typedVal.Val.ObjVal;
-                        break;
-                    case JavaObjType.Array:
-                        val = typedVal.Val.ObjArrayVal;
-                        break;
-                    default:
-                        throw new NotImplementedException($"ObjectType: {typedVal.Typing.ObjectType} not mapped");
-                }
-                break;
-            case JavaType.Void:
-                throw new InvalidCastException("Property has void value");
-            default:
-                throw new NotImplementedException($"JavaType: {typedVal.Typing.Type} not mapped");
-        }
-
-        return val;
-    }
-    
-    
-    
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_call_method")]
-    private static extern JavaTypedVal call_method(IntPtr env, IntPtr obj, string method, JavaFullType type, IntPtr args);
-    
-    
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_args_new_ptr")]
-    internal static extern IntPtr new_args(int argAmnt);
-    
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_args_add")]
-    internal static extern void args_add(IntPtr args, JavaTypedVal arg);
 
     private JavaTypedVal Call(string method, JavaFullType returnType, params object[] args)
     {
+        Jvm.UsingArgs<>()
+        
+        
         var argsPtr = new_args(args.Length);
         
         var argList = args.Select(JavaObject.MapToVal).ToList();
@@ -315,6 +199,10 @@ public class JavaObject : DynamicObject, IDisposable
     }
     public T Call<T>(string method, params object[] args)
     {
+        
+        Jvm
+        Jvm.UsingArgs<T>()
+        
         return (T) MapVal(Env, Call(method, MapToType(typeof(T)), args));
     }
     
@@ -361,10 +249,10 @@ public class JavaObject : DynamicObject, IDisposable
     // }
 
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "_java_release_object")]
-    private static extern void release_obj(IntPtr env, IntPtr obj);
+    internal static extern void release_obj(IntPtr env, IntPtr obj);
     public void Dispose()
     {
-        if (Env == null)
+        if (Env == IntPtr.Zero)
         {
             return;
         }

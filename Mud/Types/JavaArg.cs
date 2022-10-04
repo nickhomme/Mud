@@ -1,138 +1,131 @@
+using System.Data;
 using System.Runtime.InteropServices;
 
 namespace Mud.Types;
 
-internal struct JavaTypedVal
+internal struct JavaCallResp
 {
-    public JavaFullType Typing { get; init; }
-    public JavaVal Val { get; init; }
+    public bool IsVoid;
+    public bool IsException;
+    public JavaArg Value;
 }
 
 
-internal struct JavaFullType
+[StructLayout(LayoutKind.Explicit)]
+internal struct JavaArg
+{
+    [FieldOffset(0)]
+    public byte Bool;
+    [FieldOffset(0)]
+    public byte Byte;
+    [FieldOffset(0)]
+    public ushort Char;
+    [FieldOffset(0)]
+    public short Short;
+    [FieldOffset(0)]
+    public int Int;
+    [FieldOffset(0)]
+    public long Long;
+    [FieldOffset(0)]
+    public float Float;
+    [FieldOffset(0)]
+    public double Double;
+    [FieldOffset(0)]
+    public IntPtr Object;
+
+
+    public static JavaArg MapFrom(object val)
+    {
+        var arg = new JavaArg();
+        switch (val)
+        {
+            case decimal v:
+                arg.Double = Convert.ToDouble(v);
+                break;
+            case double v:
+                arg.Double = v;
+                break;
+            case int v:
+                arg.Int = v;
+                break;
+            case byte v:
+                arg.Byte = v;
+                break;
+            case bool v:
+#if !NET7_0_OR_GREATER
+                arg.Bool = v ? byte.One : byte.Zero);
+#else
+                arg.Bool = (byte)(v ? 1 : 0);
+#endif
+                break;
+            case char v:
+                arg.Char = v;
+                break;
+            case long v:
+                arg.Long = v;
+                break;
+            case short v:
+                arg.Short = v;
+                break;
+            case float v:
+                arg.Float = v;
+                break;
+            case JavaObject v:
+                arg.Object = v.Jobj;
+                break;
+            case IntPtr v:
+                arg.Object = v;
+                break;
+            case Enum v:
+                arg.Int = Convert.ToInt32(v);
+                break;
+            default:
+                throw new ConstraintException($"Cannot determine java type for val: {val?.GetType()?.Name ?? "null"} ");
+        }
+
+        return arg;
+    }
+}
+
+
+
+internal class JavaFullType
 {
     public JavaType Type { get; init; } = 0;
-    public JavaObjType ObjectType { get; init; } = 0;
+    // public JavaObjType ObjectType { get; init; } = 0;
     public string? CustomType { get; init; } = null;
-    public IntPtr ArrayType { get; init; } = IntPtr.Zero;
+    public JavaFullType? ArrayType { get; init; } = null;
 
     public JavaFullType(JavaType type)
     {
         Type = type;
     }
 
-    public JavaFullType(JavaObjType objType)
-    {
-        Type = JavaType.Object;
-        ObjectType = objType;
-    }
-    
-    public JavaFullType(JavaType type, JavaObjType objType)
-    {
-        Type = type;
-        ObjectType = objType;
-    }
-    
+    // public JavaFullType(JavaObjType objType)
+    // {
+    //     Type = JavaType.Object;
+    //     ObjectType = objType;
+    // }
+    //
+    // public JavaFullType(JavaType type, JavaObjType objType)
+    // {
+    //     Type = type;
+    //     ObjectType = objType;
+    // }
 }
 
-
-internal struct JavaVal
-{
-    public byte BoolVal { get; init; } = default;
-    public byte ByteVal { get; init; } = default;
-    public char CharVal { get; init; } = default;
-    public int IntVal { get; init; } = default;
-    public short ShortVal { get; init; } = default;
-    public long LongVal { get; init; } = default;
-    public float FloatVal { get; init; } = default;
-    public double DoubleVal { get; init; } = default;
-    public JString StringVal { get; init; } = default;
-    public IntPtr ObjVal { get; init; } = default;
-    public JArray ArrayVal { get; init; } = default;
-
-    public JavaVal(){}
-    public JavaVal(byte boolVal) : this()
-    {
-        BoolVal = boolVal;
-        ByteVal = boolVal;
-    }
-
-    public JavaVal(char charVal) : this()
-    {
-        CharVal = charVal;
-    }
-
-    public JavaVal(int intVal) : this()
-    {
-        IntVal = intVal;
-    }
-
-    public JavaVal(short shortVal) : this()
-    {
-        ShortVal = shortVal;
-    }
-
-    public JavaVal(long longVal) : this()
-    {
-        LongVal = longVal;
-    }
-
-    public JavaVal(float floatVal) : this()
-    {
-        FloatVal = floatVal;
-    }
-
-    public JavaVal(double doubleVal) : this()
-    {
-        DoubleVal = doubleVal;
-    }
-    
-    public JavaVal(decimal doubleVal) : this()
-    {
-        DoubleVal = Convert.ToDouble(doubleVal);
-    }
-
-    public JavaVal(string stringVal) : this()
-    {
-        StringVal = new(stringVal) {};
-    }
-
-    public JavaVal(IntPtr objVal) : this()
-    {
-        ObjVal = objVal;
-    }
-}
-
-public struct JString
-{
-    public IntPtr JavaString { get; init; }
-    public IntPtr CharPtr { get; init; }
-
-    public string? Val
-    {
-        get => Marshal.PtrToStringAuto(CharPtr);
-        init => CharPtr = Marshal.StringToHGlobalAnsi(value);
-    }
-
-    public JString(string val) : this()
-    {
-        Val = val;
-    }
-}
-
-
-internal struct JArray
-{
-    public int Size { get; init; }
-    public IntPtr JavaArray { get; init; }
-
-    public T GetAt<T>(int index)
-    {
-        
-    }
-
-    public JArray(string val) : this()
-    {
-        Val = val;
-    }
-}
+// internal struct JArray
+// {
+//     public int Size { get; init; }
+//     public IntPtr JavaArray { get; init; }
+//
+//     public T GetAt<T>(int index)
+//     {
+//         
+//     }
+//
+//     public JArray(string val) : this()
+//     {
+//         Val = val;
+//     }
+// }
