@@ -18,23 +18,54 @@ public class ClassPathAttribute : Attribute
     }
 }
 
-// [ClassPath("Java.Lang.Object")]
+[ClassPath("java.lang.Object")]
 public class JavaObject : DynamicObject, IDisposable
 {
     internal IntPtr Env { get; set; }
     internal IntPtr Jobj { get; private set; }
+    public string JavaObjAddress => Jobj.HexAddress();
+    public string ClassPath => Info.ClassPath;
     internal Jvm Jvm { get; set; }
     internal ClassInfo Info { get; set; }
+
+    public override string ToString()
+    {
+        return $"{Info?.ClassPath}::{JavaObjAddress}";
+    }
 
     internal void SetObj(IntPtr obj)
     {
         Jobj = obj;
     }
-    public void Bind(params object[] args)
+
+    public bool InstanceOf(string classPath)
+    {
+        return MudInterface.instance_of(Env, Jobj, Jvm.GetClass(classPath).Cls);
+    }
+    
+    public bool InstanceOf(ClassInfo cls)
+    {
+        return MudInterface.instance_of(Env, Jobj, cls.Cls);
+    }
+    
+    internal bool InstanceOf(IntPtr cls)
+    {
+        return MudInterface.instance_of(Env, Jobj, cls);
+    }
+    
+    public bool InstanceOf(JavaObject obj)
+    {
+        // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
+        obj.Info ??= Jvm.GetClass(obj.GetType().GetCustomAttribute<ClassPathAttribute>()!.ClassPath);
+        return InstanceOf(obj.Info);
+    }
+    
+    
+    internal void Bind(params object[] args)
     {
         Jvm.UsingArgs(args, jArgs =>
         {
-            Jobj = MudInterface.new_obj(Jvm.Instance.Env, Info.Cls, GenMethodSignature(null, args), jArgs);
+            Jobj = MudInterface.new_obj(Jvm.Instance.Env, Info.Cls, GenMethodSignature((Type?) null, args), jArgs);
         });
     }
     
@@ -79,6 +110,11 @@ public class JavaObject : DynamicObject, IDisposable
     {
         return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : GenSignature(returnType))}";
     }
+
+    internal static string GenMethodSignature(JavaFullType? returnType, params object[] args)
+    {
+        return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : GenSignature(returnType))}";
+    }
     internal static string GenMethodSignature(Type? returnType, params object[] args)
     {
         return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : GenSignature(returnType))}";
@@ -120,6 +156,15 @@ public class JavaObject : DynamicObject, IDisposable
             return new(JavaType.Long);
         }
 
+
+        if (type.IsArray)
+        {
+            return new JavaFullType(JavaType.Object)
+            {
+                ArrayType = MapToType(type.GetElementType()!)
+            };
+        }
+        
         if (type == typeof(string))
         {
             return new JavaFullType(JavaType.Object)
@@ -127,15 +172,22 @@ public class JavaObject : DynamicObject, IDisposable
                 CustomType = "java/lang/String"
             };
         }
-        if (type.IsAssignableTo(typeof(JavaObject)) || type == typeof(IntPtr))
+        if (type.IsAssignableTo(typeof(JavaObject)))
+        {
+            return new(JavaType.Object)
+            {
+                CustomType = type.GetCustomAttribute<ClassPathAttribute>()?.ClassPath
+            };
+        }
+        if (type == typeof(IntPtr))
         {
             return new(JavaType.Object);
         }
 
         throw new ConstraintException($"Cannot determine java type for class: {type.FullName ?? type.Name} ");
     }
-    
-    
+
+
     
 
     public void Call(string method, params object[] args)
@@ -147,8 +199,19 @@ public class JavaObject : DynamicObject, IDisposable
         return Info.CallMethod<T>(Jobj, method, args);
     }
 
+    public JavaObject CallNamedReturn(string method, JavaFullType returnType, params object[] args) =>
+        CallNamedReturn<JavaObject>(method, returnType, args); 
+    public T CallNamedReturn<T>(string method, JavaFullType returnType, params object[] args)
+    {
+        return Info.CallMethodNamedReturn<T>(Jobj, method, returnType, args);
+    }
 
-    public T GetProp<T>(string prop) => Info.GetField<T>(Jobj, prop);
+
+    public JavaObject GetProp(string prop, JavaFullType? type = null) => GetProp<JavaObject>(prop, type);
+    public T GetProp<T>(string prop, JavaFullType? type = null)
+    {
+        return Info.GetField<T>(Jobj, prop, type);
+    }
 
     
     public void Dispose()

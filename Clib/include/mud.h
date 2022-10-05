@@ -20,10 +20,12 @@ struct JavaCallResp_S {
 
 static jthrowable _java_jvm_check_exception(JNIEnv* env) {
   if (!(*env)->ExceptionCheck(env)) {
+    puts("Is NOT Exception");
     return null;
   }
-//  printf("[Exception]:\n");
-//  (*env)->ExceptionDescribe(env);
+  puts("Is DEF Exception");
+  printf("[Exception]:\n");
+  (*env)->ExceptionDescribe(env);
   jthrowable ex = (*env)->ExceptionOccurred(env);
   (*env)->ExceptionClear(env);
   return ex;
@@ -39,11 +41,6 @@ static const char* _java_jstring_to_string(JNIEnv* env, jstring message) {
 
 void _java_string_release(JNIEnv* env, jstring message, const char* msgChars);
 
-Java_Args _java_args_new(int argAmnt);
-
-Java_Args* _java_args_new_ptr(int argAmnt);
-
-void _java_args_add(Java_Args* args, Java_Typed_Val arg);
 //static JNIEXPORT void Java_Natives_printf(JNIEnv *env, jobject obj, jstring message) {
 //  std::string msg = _java_jstring_to_string(message);
 //  printf("%s\n", msg);
@@ -67,7 +64,7 @@ struct Java_String_Resp {
   const char* char_ptr;
 };
 
-struct Java_String_Resp _java_string_new(JNIEnv *env, const char* msg);
+struct Java_String_Resp mud_string_new(JNIEnv *env, const char* msg);
 
 //Java_Typed_Val _java_call_method_manual(JNIEnv* env,
 //                                 jobject obj,
@@ -81,185 +78,55 @@ struct Java_Exception_S {
   char* stack_trace;
 };
 
-static char* _java_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod, jmethodID  getStackMethod, jmethodID exToStringMethod, jmethodID frameToStringMethod,
-                                     bool isTop) {
-
-  char msg[2048];
-  memset(msg, 0, 2048);
-
-// Get the array of StackTraceElements.
-  jobjectArray frames =
-      (jobjectArray) (*env)->CallObjectMethod(env,
-                                              ex,
-          getStackMethod);
-  jsize frames_length = (*env)->GetArrayLength(env, frames);
-
-  // Add Throwable.toString() before descending
-  // stack trace messages.
-  size_t len = strlen(msg);
-  if (0 != frames)
-  {
-    jstring msg_obj =
-        (jstring) (*env)->CallObjectMethod(env, ex,
-                                             exToStringMethod);
-    const char* exMsgStr = (*env)->GetStringUTFChars(env, msg_obj, 0);
-    const size_t exMsgStrLen = strlen(exMsgStr);
-
-    // If this is not the top-of-the-trace then
-    // this is a cause.
-    if (isTop)
-    {
-      const char* causedByMsg = "\nCaused by: ";
-      const size_t causedByMsgLen = strlen(causedByMsg);
-      memcpy(msg + (sizeof(char) * len), causedByMsg, causedByMsgLen);
-      len += causedByMsgLen;
-    }
-    memcpy(msg + (sizeof(char) * len), exMsgStr, exMsgStrLen);
-
-    (*env)->ReleaseStringUTFChars(env, msg_obj, exMsgStr);
-    (*env)->DeleteLocalRef(env, msg_obj);
-    len += exMsgStrLen;
-  }
-
-  // Append stack trace messages if there are any.
-  if (frames_length > 0)
-  {
-    jsize i = 0;
-    for (i = 0; i < frames_length; i++)
-    {
-      // Get the string returned from the 'toString()'
-      // method of the next frame and append it to
-      // the error message.
-      jobject frame = (*env)->GetObjectArrayElement(env, frames, i);
-      jstring msg_obj =
-          (jstring) (*env)->CallObjectMethod(env, frame, frameToStringMethod);
-
-      const char* msg_str = (*env)->GetStringUTFChars(env, msg_obj, 0);
-
-
-      const char* indentMsg = "\n    ";
-      const size_t indentMsgLen = 5;
-      memcpy(msg + (sizeof(char) * len), indentMsg, indentMsgLen);
-      len += indentMsgLen;
-
-      (*env)->ReleaseStringUTFChars(env, msg_obj, msg_str);
-      (*env)->DeleteLocalRef(env, msg_obj);
-      (*env)->DeleteLocalRef(env, frame);
-    }
-  }
-
-  // If 'ex' has a cause then append the
-  // stack trace messages from the cause.
-  if (0 != frames)
-  {
-    jthrowable cause =
-        (jthrowable) (*env)->CallObjectMethod(env,
-            ex,
-            getCauseMethod);
-    if (0 != cause)
-    {
-      char* subFrameMsg = _java_get_exception_msg(env,
-                                       cause,
-                                       getCauseMethod,
-                                       getStackMethod,
-                                       exToStringMethod,
-                                       frameToStringMethod, false);
-      const size_t subFrameMsgLen = strlen(subFrameMsg);
-      memcpy(msg + (sizeof(char) * len), subFrameMsg, subFrameMsgLen);
-      len += subFrameMsgLen;
-      free(subFrameMsg);
-    }
-  }
-  char* finalMsg = malloc(sizeof(char) * len + 1);
-  memcpy(finalMsg, msg, len);
-  finalMsg[len] = '\0';
-  return finalMsg;
-}
+char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod,
+                            jmethodID  getStackMethod, jmethodID exToStringMethod,
+                            jmethodID frameToStringMethod, bool isTop);
 
 void _java_add_class_path(JNIEnv* env, const char* path);
 jclass mud_get_class(JNIEnv* env, const char* className);
 jclass mud_get_class_of_obj(JNIEnv* env, jobject obj);
 
-Java_Typed_Val _java_call_method_varargs(JNIEnv* env,
-                                         jobject obj,
-                                         const char* methodName,
-                                         Java_Full_Type returnType,
-                                         int argAmnt,
-                                         Java_Typed_Val* args);
-Java_Typed_Val _java_call_method(JNIEnv* env,
-                                 jobject obj,
-                                 const char* methodName,
-                                 Java_Full_Type returnType,
-                                 Java_Args* args);
-
-void _java_call_method_void(JNIEnv* env,
-                            jobject obj,
-                            const char* methodName,
-                            Java_Full_Type returnType,
-                            Java_Args* args);
-Java_Typed_Val _java_call_static_method_varargs(JNIEnv* env,
-                                                jclass cls,
-                                                const char* methodName,
-                                                Java_Full_Type returnType,
-                                                int argAmnt,
-                                                Java_Typed_Val* args);
-Java_Typed_Val _java_call_static_method(JNIEnv* env,
-                                        jclass cls,
-                                        const char* methodName,
-                                        Java_Full_Type returnType,
-                                        Java_Args* args);
-Java_Typed_Val _java_call_static_method_named(JNIEnv* env,
-                                              const char* className,
-                                              const char* methodName,
-                                              Java_Full_Type returnType,
-                                              Java_Args* args);
-Java_Typed_Val _java_call_static_method_named_varargs(JNIEnv* env,
-                                                      const char* className,
-                                                      const char* methodName,
-                                                      Java_Full_Type returnType,
-                                                      int argAmnt,
-                                                      Java_Typed_Val* args);
-
 jobject mud_new_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args);
-
-jfieldID _java_get_field_id(JNIEnv* env, const char* cls, const char* field, Java_Full_Type type);
-
-jfieldID _java_get_field_id_by_class(JNIEnv* env, jclass cls, const char* field, Java_Full_Type type);
-
-Java_Typed_Val _java_get_object_property(JNIEnv* env, jobject object, jfieldID field, Java_Full_Type type);
-
-Java_Typed_Val _java_get_object_property_by_name(JNIEnv* env, jobject object, const char* field, Java_Full_Type type);
-
 
 jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature);
 jmethodID mud_get_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature);
 
 
 
-static struct JavaCallResp_S map_call_result(JNIEnv* env, Java_Type type, ptr val) {
-  struct JavaCallResp_S result;
+static jvalue map_value(Java_Type type, ptr val) {
+  jvalue value = {};
   if (type == Java_Bool) {
-    result.value.b = *((jbyte*)val);
+    value.b = *((jbyte*)val);
   } else if (type == Java_Int) {
-    result.value.i = *((jint*)val);
+    value.i = *((jint*)val);
   } else if (type == Java_Long) {
-    result.value.j = *((jlong *)val);
+    value.j = *((jlong *)val);
   } else if (type == Java_Byte) {
-    result.value.b = *((jbyte *)val);
+    value.b = *((jbyte *)val);
   } else if (type == Java_Char) {
-    result.value.c = *((jchar *)val);
+    value.c = *((jchar *)val);
   } else if (type == Java_Short) {
-    result.value.s = *((jshort *)val);
+    value.s = *((jshort *)val);
   } else if (type == Java_Float) {
-    result.value.f = *((jfloat *)val);
+    value.f = *((jfloat *)val);
   } else if (type == Java_Double) {
-    result.value.d = *((jdouble*)val);
-  } else if (type == Java_Void) {
-    result.is_void = true;
+    value.d = *((jdouble*)val);
   } else if (type == Java_Object) {
-    result.value.l = *((jobject*)val);
+    value.l = *((jobject*)val);
+  }
+  return value;
+}
+static struct JavaCallResp_S map_call_result(JNIEnv* env, Java_Type type, ptr val) {
+  struct JavaCallResp_S result = {
+    .is_exception = false,
+    .is_void = false,
+    .value = map_value(type, val),
+  };
+  if (type == Java_Void) {
+    result.is_void = true;
   }
   jthrowable exception = _java_jvm_check_exception(env);
+  printf("Excption???? [%i]\n", !!exception);
   if (exception) {
     result.value.l = exception;
     result.is_exception = true;
@@ -271,7 +138,7 @@ static struct JavaCallResp_S mud_call_handler(JNIEnv* env, ptr objOrCls, jmethod
 #define call(name) (isStatic ? (*env)->CallStatic##name##MethodA : (*env)->Call##name##MethodA)(env, objOrCls, method, args)
 #define retCallMap(name, jtype) jtype val = call(name); return map_call_result(env, type, &val);
   struct JavaCallResp_S result;
-//  printf("Calling %s Method: %p with return of %i om %p\n", isStatic ? "static" : "member", method, type, objOrCls);
+  printf("Calling %s Method: %p with return of %i on %p\n", isStatic ? "static" : "member", method, type, objOrCls);
 
   if (type == Java_Bool) {
     retCallMap(Boolean, jboolean)
@@ -347,5 +214,10 @@ static jvalue mud_field_handler(JNIEnv* env, ptr objOrCls, jfieldID field, Java_
 
 jvalue mud_get_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type);
 jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_Type type);
+bool mud_instance_of(JNIEnv* env, jobject obj, jclass cls);
+
+size_t mud_array_length(JNIEnv* env, jarray arr);
+jvalue mud_array_get_at(JNIEnv* env, jarray arr, int index, Java_Type type);
+//jvalue* mud_array_get_all(JNIEnv* env, jarray arr, Java_Type type);
 
 #endif //MUD_LIBRARY_H

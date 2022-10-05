@@ -1,11 +1,6 @@
 #include <unistd.h>
 #include "../include/mud.h"
 
-void _java_release_method_args(JNIEnv* env, const jvalue* methodArgs, Java_Args* args);
-jvalue *_java_args_to_method_args(JNIEnv *env, Java_Args* args);
-
-
-
 
 JavaVMOption* _java_jvm_options(size_t amnt) {
   return malloc(sizeof(JavaVMOption) * amnt);
@@ -108,155 +103,6 @@ jclass mud_get_class(JNIEnv* env, const char* className) {
   return cls;
 }
 
-Java_Typed_Val _java_call_method_varargs(JNIEnv* env,
-                                         jobject obj,
-                                         const char* methodName,
-                                         Java_Full_Type returnType,
-                                         int argAmnt,
-                                         Java_Typed_Val* argsData) {
-  Java_Args args = {.args = argsData, .arg_amount = argAmnt};
-  return _java_call_method(env, obj, methodName, returnType, &args);
-}
-Java_Typed_Val _java_call_method(JNIEnv* env,
-                                 jobject obj,
-                                 const char* methodName,
-                                 Java_Full_Type returnType,
-                                 Java_Args* args) {
-  jclass cls = (*env)->GetObjectClass(env, obj);
-
-  const char* methodTyping = _java_method_typing_string(returnType, args);
-  jmethodID mid = (*env)->GetMethodID(env, cls, methodName, methodTyping);  // find method
-  if (!mid) {
-    printf("Method not found: %s %s\n", methodName, methodTyping);
-    exit(1);
-  }
-  safe_free(methodTyping);
-  Java_Val result;
-
-  const jvalue* methodArgs = _java_args_to_method_args(env, args);
-  if (returnType.type == Java_Bool) {
-    result.bool_val = (*env)->CallBooleanMethodA(env, obj, mid, methodArgs);
-  } else if (returnType.type == Java_Int) {
-    result.int_val = (*env)->CallIntMethodA(env, obj, mid, methodArgs);
-  } else if (returnType.type == Java_Long) {
-    result.long_val = (*env)->CallLongMethodA(env, obj, mid, methodArgs);
-  } else if (returnType.type == Java_Byte) {
-    result.byte_val = (*env)->CallByteMethodA(env, obj, mid, methodArgs);
-  } else if (returnType.type == Java_Char) {
-    result.char_val = (*env)->CallCharMethodA(env, obj, mid, methodArgs);
-  } else if (returnType.type == Java_Short) {
-    result.short_val = (*env)->CallShortMethodA(env, obj, mid, methodArgs);
-  } else if (returnType.type == Java_Float) {
-    result.float_val = (*env)->CallFloatMethodA(env, obj, mid, methodArgs);
-  } else if (returnType.type == Java_Double) {
-    result.double_val = (*env)->CallDoubleMethodA(env, obj, mid, methodArgs);
-  } else if (returnType.type == Java_Void) {
-    (*env)->CallVoidMethodA(env, obj, mid, methodArgs);
-  } else if (returnType.type == Java_Object) {
-    result.obj_val = (*env)->CallObjectMethodA(env, obj, mid, methodArgs);
-  }
-  jthrowable exception = _java_jvm_check_exception(env);
-  if (exception) {
-    result.obj_val = exception;
-    returnType.object_type = Java_Object_Throwable;
-  } else if (returnType.object_type == Java_Object_String) {
-    jstring resultStr = ((jstring) result.obj_val);
-    result.string_val.jstring = resultStr;
-    result.string_val.char_ptr = _java_jstring_to_string(env, resultStr);
-  }
-  _java_release_method_args(env, methodArgs, args);
-
-  Java_Typed_Val typedResult = {
-      .type = {
-          .type = returnType.type,
-          .object_type = returnType.object_type,
-      },
-      .val = result
-  };
-  return typedResult;
-}
-Java_Typed_Val _java_call_static_method_varargs(JNIEnv* env,
-                                                jclass cls,
-                                                const char* methodName,
-                                                Java_Full_Type returnType,
-                                                int argAmnt,
-                                                Java_Typed_Val* argsData) {
-  Java_Args args = {.args = argsData, .arg_amount = argAmnt};
-  return _java_call_static_method(env, cls, methodName, returnType, &args);
-}
-Java_Typed_Val _java_call_static_method(JNIEnv* env,
-                                        jclass cls,
-                                        const char* methodName,
-                                        Java_Full_Type returnType,
-                                        Java_Args* args) {
-  const char* methodTyping = _java_method_typing_string(returnType, args);
-  jmethodID mid = (*env)->GetStaticMethodID(env, cls, methodName, methodTyping);  // find method
-  if (!mid) {
-    printf("ERROR: method `%s`::`%s` not found !\n", methodName, methodTyping);
-    exit(1);
-  }
-  safe_free(methodTyping);
-
-//  (*env)->CallStaticMethod(env, cls, mid);                      // call method
-//  jobject result = (*env)->CallStaticObjectMethodA(env, cls, mid, methodArgs);
-//  _java_jvm_check_exception(env);
-//
-//  Java_Full_Type  value = {.type_data = returnType, .value = result};
-//  return value;
-
-  Java_Val result;
-  const jvalue* methodArgs = _java_args_to_method_args(env, args);
-  if (returnType.type == Java_Bool) {
-    result.bool_val = (*env)->CallStaticBooleanMethodA(env, cls, mid, methodArgs);
-  } else if (returnType.type == Java_Int) {
-    result.int_val = (*env)->CallStaticIntMethodA(env, cls, mid, methodArgs);
-  } else if (returnType.type == Java_Long) {
-    result.long_val = (*env)->CallStaticLongMethodA(env, cls, mid, methodArgs);
-  } else if (returnType.type == Java_Byte) {
-    result.byte_val = (*env)->CallStaticByteMethodA(env, cls, mid, methodArgs);
-  } else if (returnType.type == Java_Char) {
-    result.char_val = (*env)->CallStaticCharMethodA(env, cls, mid, methodArgs);
-  } else if (returnType.type == Java_Short) {
-    result.short_val = (*env)->CallStaticShortMethodA(env, cls, mid, methodArgs);
-  } else if (returnType.type == Java_Float) {
-    result.float_val = (*env)->CallStaticFloatMethodA(env, cls, mid, methodArgs);
-  } else if (returnType.type == Java_Double) {
-    result.double_val = (*env)->CallStaticDoubleMethodA(env, cls, mid, methodArgs);
-  } else if (returnType.type == Java_Void) {
-    (*env)->CallStaticVoidMethodA(env, cls, mid, methodArgs);
-  } else if (returnType.type == Java_Object) {
-    result.obj_val = (*env)->CallStaticObjectMethodA(env, cls, mid, methodArgs);
-  }
-
-  jthrowable exception = _java_jvm_check_exception(env);
-  if (exception) {
-    result.obj_val = exception;
-    returnType.object_type = Java_Object_Throwable;
-  } else if (returnType.object_type == Java_Object_String) {
-    jstring resultStr = ((jstring) result.obj_val);
-    result.string_val.jstring = resultStr;
-    result.string_val.char_ptr = _java_jstring_to_string(env, resultStr);
-  }
-  _java_release_method_args(env, methodArgs, args);
-
-
-  int i = 1;
-
-//  while (i) {
-//    usleep(1 * 1000 * 1000);
-//  }
-  Java_Typed_Val typedResult = {
-      .type = {
-          .type = returnType.type,
-          .object_type = returnType.object_type,
-        },
-      .val = result
-  };
-  return typedResult;
-//  return (Java_Typed_Val) {.val = result };
-
-}
-
 void _java_release_object(JNIEnv* env, jobject obj) {
   (*env)->DeleteLocalRef(env, obj);
 }
@@ -279,59 +125,12 @@ void _java_jvm_destroy_instance(JavaVM* jvm) {
   (*jvm)->DestroyJavaVM(jvm);
   printf("JVM destroyed\n");
 }
-Java_Args _java_args_new(int argAmnt) {
-  Java_Args args = {.args = (Java_Typed_Val*) malloc(sizeof(Java_Typed_Val) * argAmnt), .arg_amount =  argAmnt};
-  return args;
-}
-Java_Args* _java_args_new_ptr(int argAmnt) {
-  Java_Args args = _java_args_new(argAmnt);
-  Java_Args* argsPtr = (Java_Args*) malloc(sizeof(Java_Args));
-  memcpy(argsPtr, &args, sizeof(Java_Args));
-  return argsPtr;
-}
+
 jclass mud_get_class_of_obj(JNIEnv* env, jobject obj) {
 //  printf("Getting cls for %p\n", obj);
   return (*env)->GetObjectClass(env, obj);
 }
-Java_Typed_Val _java_call_static_method_named(JNIEnv* env,
-                                              const char* className,
-                                              const char* methodName,
-                                              Java_Full_Type returnType,
-                                              Java_Args* args) {
-  jclass
-      cls = mud_get_class(env, className);
-  return _java_call_static_method(env,
-                                  cls, methodName, returnType, args);
-}
-Java_Typed_Val _java_call_static_method_named_varargs(JNIEnv* env,
-                                                      const char* className,
-                                                      const char* methodName,
-                                                      Java_Full_Type returnType,
-                                                      int argAmnt,
-                                                      Java_Typed_Val* args) {
-  jclass
-      cls = mud_get_class(env, className);
-  return _java_call_static_method_varargs(env,
-                                          cls, (methodName), (returnType), argAmnt, args);
-}
 
-jfieldID _java_get_field_id(JNIEnv* env, const char* cls, const char* field, Java_Full_Type type) {
-  jclass javaClass = mud_get_class(env,
-                                     cls);
-  const char* typeStr = _java_get_obj_type_string(type);
-  jfieldID jfieldId = (*env)->GetFieldID(env, javaClass, field, typeStr);
-
-  if (type.object_type == Java_Object_Custom) {
-    safe_free(typeStr);
-  }
-  return jfieldId;
-}
-
-
-void _java_args_add(Java_Args* args, Java_Typed_Val arg) {
-  args->args[args->current_arg] = arg;
-  args->current_arg++;
-}
 void interop_free(ptr pointer) {
   safe_free(pointer);
 }
@@ -340,25 +139,6 @@ void _java_string_release(JNIEnv* env, jstring message, const char* msgChars) {
 //  _java_release_object(env, message);
 }
 
-jvalue *_java_args_to_method_args(JNIEnv *env, Java_Args* args) {
-  jvalue *methodArgs = _java_args_to_method_args_new(args);
-  for (size_t i = 0; i < (*args).arg_amount; i++) {
-    methodArgs[i] = _java_args_to_method_arg_to_jvalue(env, (*args).args[i]);
-  }
-  return methodArgs;
-}
-
-
-void _java_release_method_args(JNIEnv* env, const jvalue* methodArgs, Java_Args* args) {
-  for (size_t i = 0; i < (*args).arg_amount; i++) {
-    jvalue jArg = methodArgs[i];
-    Java_Typed_Val arg = (*args).args[i];
-    if (arg.type.object_type == Java_Object_String) {
-      _java_release_object(env, jArg.l);
-    }
-
-  }
-}
 
 //Java_Typed_Val _java_call_method_manual(JNIEnv* env,
 //                                        jobject obj,
@@ -373,7 +153,7 @@ void _java_release_method_args(JNIEnv* env, const jvalue* methodArgs, Java_Args*
 //  std::cout << "Added " << urlPath << " to the classpath." << std::endl;
 //}
 
-struct Java_String_Resp _java_string_new(JNIEnv *env, const char* msg) {
+struct Java_String_Resp mud_string_new(JNIEnv *env, const char* msg) {
   const size_t strLen = strlen(msg);
   char* newStr = malloc(sizeof(char) * strLen + 1);
   memcpy(newStr, msg, sizeof(char) * strLen);
@@ -428,4 +208,141 @@ jvalue mud_get_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type t
 }
 jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_Type type) {
   return mud_field_handler(env, cls, field, type, true);
+}
+
+bool mud_instance_of(JNIEnv* env, jobject obj, jclass cls) {
+  return (*env)->IsInstanceOf(env, obj, cls);
+}
+
+size_t mud_array_length(JNIEnv* env, jarray arr) {
+  return (*env)->GetArrayLength(env, arr);
+}
+
+jvalue mud_array_get_at(JNIEnv* env, jarray arr, int index, Java_Type type) {
+#define retGetMap(name, jtype) jtype val; (*env)->Get##name##ArrayRegion(env, arr, index, 1, &val); return map_value(type, &val);
+  jboolean a;
+
+  struct JavaCallResp_S result;
+  if (type == Java_Bool) {
+    retGetMap(Boolean, jboolean)
+  } else if (type == Java_Int) {
+    retGetMap(Int, jint)
+  } else if (type == Java_Long) {
+    retGetMap(Long, jlong)
+  } else if (type == Java_Byte) {
+    retGetMap(Byte, jbyte)
+  } else if (type == Java_Char) {
+    retGetMap(Char, jchar)
+  } else if (type == Java_Short) {
+    retGetMap(Short, jshort)
+  } else if (type == Java_Float) {
+    retGetMap(Float, jfloat)
+  } else if (type == Java_Double) {
+    retGetMap(Double, jdouble)
+  } else {
+   return (jvalue) {
+       .l = (*env)->GetObjectArrayElement(env, arr, index)
+   };
+  }
+}
+
+//jvalue* mud_array_get_all(JNIEnv* env, jarray arr, Java_Type type) {
+//  (*env)->GetEle(env, arr, index)
+//}
+
+char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod, jmethodID  getStackMethod, jmethodID exToStringMethod, jmethodID frameToStringMethod,
+                            bool isTop) {
+
+   return calloc(1, sizeof(char));
+
+  char msg[2048];
+  memset(msg, 0, 2048);
+
+// Get the array of StackTraceElements.
+  jobjectArray frames =
+      (jobjectArray) (*env)->CallObjectMethod(env,
+                                              ex,
+                                              getStackMethod);
+  jsize frames_length = (*env)->GetArrayLength(env, frames);
+
+  // Add Throwable.toString() before descending
+  // stack trace messages.
+  size_t len = strlen(msg);
+  if (0 != frames)
+  {
+    jstring msg_obj =
+        (jstring) (*env)->CallObjectMethod(env, ex,
+                                           exToStringMethod);
+    const char* exMsgStr = (*env)->GetStringUTFChars(env, msg_obj, 0);
+    const size_t exMsgStrLen = strlen(exMsgStr);
+
+    // If this is not the top-of-the-trace then
+    // this is a cause.
+    if (isTop)
+    {
+      const char* causedByMsg = "\nCaused by: ";
+      const size_t causedByMsgLen = strlen(causedByMsg);
+      memcpy(msg + (sizeof(char) * len), causedByMsg, causedByMsgLen);
+      len += causedByMsgLen;
+    }
+    memcpy(msg + (sizeof(char) * len), exMsgStr, exMsgStrLen);
+
+    (*env)->ReleaseStringUTFChars(env, msg_obj, exMsgStr);
+    (*env)->DeleteLocalRef(env, msg_obj);
+    len += exMsgStrLen;
+  }
+
+  // Append stack trace messages if there are any.
+  if (frames_length > 0)
+  {
+    jsize i = 0;
+    for (i = 0; i < frames_length; i++)
+    {
+      // Get the string returned from the 'toString()'
+      // method of the next frame and append it to
+      // the error message.
+      jobject frame = (*env)->GetObjectArrayElement(env, frames, i);
+      jstring msg_obj =
+          (jstring) (*env)->CallObjectMethod(env, frame, frameToStringMethod);
+
+      const char* msg_str = (*env)->GetStringUTFChars(env, msg_obj, 0);
+
+
+      const char* indentMsg = "\n    ";
+      const size_t indentMsgLen = 5;
+      memcpy(msg + (sizeof(char) * len), indentMsg, indentMsgLen);
+      len += indentMsgLen;
+
+      (*env)->ReleaseStringUTFChars(env, msg_obj, msg_str);
+      (*env)->DeleteLocalRef(env, msg_obj);
+      (*env)->DeleteLocalRef(env, frame);
+    }
+  }
+
+  // If 'ex' has a cause then append the
+  // stack trace messages from the cause.
+  if (0 != frames)
+  {
+    jthrowable cause =
+        (jthrowable) (*env)->CallObjectMethod(env,
+                                              ex,
+                                              getCauseMethod);
+    if (0 != cause)
+    {
+      char* subFrameMsg = mud_get_exception_msg(env,
+                                                cause,
+                                                getCauseMethod,
+                                                getStackMethod,
+                                                exToStringMethod,
+                                                frameToStringMethod, false);
+      const size_t subFrameMsgLen = strlen(subFrameMsg);
+      memcpy(msg + (sizeof(char) * len), subFrameMsg, subFrameMsgLen);
+      len += subFrameMsgLen;
+      free(subFrameMsg);
+    }
+  }
+  char* finalMsg = malloc(sizeof(char) * len + 1);
+  memcpy(finalMsg, msg, len);
+  finalMsg[len] = '\0';
+  return finalMsg;
 }

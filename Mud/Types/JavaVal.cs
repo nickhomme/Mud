@@ -7,12 +7,12 @@ internal struct JavaCallResp
 {
     public bool IsVoid;
     public bool IsException;
-    public JavaArg Value;
+    public JavaVal Value;
 }
 
 
 [StructLayout(LayoutKind.Explicit)]
-internal struct JavaArg
+internal struct JavaVal
 {
     [FieldOffset(0)]
     public byte Bool;
@@ -34,9 +34,9 @@ internal struct JavaArg
     public IntPtr Object;
 
 
-    public static JavaArg MapFrom(object val)
+    public static JavaVal MapFrom(object val)
     {
-        var arg = new JavaArg();
+        var arg = new JavaVal();
         switch (val)
         {
             case decimal v:
@@ -89,13 +89,28 @@ internal struct JavaArg
 
 
 
-internal class JavaFullType
+public class JavaFullType
 {
     public JavaType Type { get; init; } = 0;
     // public JavaObjType ObjectType { get; init; } = 0;
-    public string? CustomType { get; init; } = null;
+    private string? _customType;
+    public string? CustomType
+    {
+        get => _customType;
+        init => _customType = value?.Replace('.', '/'); 
+    }
     public JavaFullType? ArrayType { get; init; } = null;
 
+    public JavaFullType(ClassInfo cls)
+    {
+        Type = JavaType.Object;
+        CustomType = cls.ClassPath;
+    }
+    public JavaFullType(string type)
+    {
+        Type = JavaType.Object;
+        CustomType = type;
+    }
     public JavaFullType(JavaType type)
     {
         Type = type;
