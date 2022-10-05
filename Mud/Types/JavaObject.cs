@@ -34,7 +34,7 @@ public class JavaObject : DynamicObject, IDisposable
     {
         Jvm.UsingArgs(args, jArgs =>
         {
-            Jobj = MudInterface.build_obj(Jvm.Instance.Jvm, Info.Cls, GenMethodSignature(null, args), jArgs);
+            Jobj = MudInterface.new_obj(Jvm.Instance.Env, Info.Cls, GenMethodSignature(null, args), jArgs);
         });
     }
     
@@ -63,7 +63,7 @@ public class JavaObject : DynamicObject, IDisposable
                 {
                     return $"[{GenSignature(val.ArrayType)}";
                 }
-                return $"L{val.CustomType!}";
+                return $"L{val.CustomType!};";
             case JavaType.Void:
                 return "V";
             default:
@@ -77,11 +77,11 @@ public class JavaObject : DynamicObject, IDisposable
 
     internal static string GenMethodSignature(Type? returnType, params Type[] args)
     {
-        return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : MapToType(returnType))}";
+        return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : GenSignature(returnType))}";
     }
     internal static string GenMethodSignature(Type? returnType, params object[] args)
     {
-        return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : MapToType(returnType))}";
+        return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : GenSignature(returnType))}";
     }
     
     
@@ -119,8 +119,15 @@ public class JavaObject : DynamicObject, IDisposable
         {
             return new(JavaType.Long);
         }
-        
-        if (type == typeof(string) || type.IsAssignableTo(typeof(JavaObject)) || type == typeof(IntPtr))
+
+        if (type == typeof(string))
+        {
+            return new JavaFullType(JavaType.Object)
+            {
+                CustomType = "java/lang/String"
+            };
+        }
+        if (type.IsAssignableTo(typeof(JavaObject)) || type == typeof(IntPtr))
         {
             return new(JavaType.Object);
         }

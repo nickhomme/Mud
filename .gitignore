@@ -1,4 +1,5 @@
 Mud/Clib/cmake-build-debug
+signatures/
 *.dylib
 *.so
 *.dll

@@ -220,7 +220,7 @@ Java_Typed_Val _java_call_static_method_named_varargs(JNIEnv* env,
                                                       int argAmnt,
                                                       Java_Typed_Val* args);
 
-jobject _java_build_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args);
+jobject mud_new_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args);
 
 jfieldID _java_get_field_id(JNIEnv* env, const char* cls, const char* field, Java_Full_Type type);
 
@@ -271,6 +271,7 @@ static struct JavaCallResp_S mud_call_handler(JNIEnv* env, ptr objOrCls, jmethod
 #define call(name) (isStatic ? (*env)->CallStatic##name##MethodA : (*env)->Call##name##MethodA)(env, objOrCls, method, args)
 #define retCallMap(name, jtype) jtype val = call(name); return map_call_result(env, type, &val);
   struct JavaCallResp_S result;
+//  printf("Calling %s Method: %p with return of %i om %p\n", isStatic ? "static" : "member", method, type, objOrCls);
 
   if (type == Java_Bool) {
     retCallMap(Boolean, jboolean)

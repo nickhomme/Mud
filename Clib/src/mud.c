@@ -47,7 +47,7 @@ Java_JVM_Instance _java_jvm_create_instance(JavaVMOption* options, int optionsAm
   vm_args.options = options;
   vm_args.nOptions = optionsAmnt;                          // number of options
 
-  printf("Creating JVMdd with args:\n");
+  printf("Creating JVM with args:\n");
   for (int i = 0; i < optionsAmnt; ++i) {
     printf("\t%s\n", options[i].optionString);
   }
@@ -260,8 +260,7 @@ Java_Typed_Val _java_call_static_method(JNIEnv* env,
 void _java_release_object(JNIEnv* env, jobject obj) {
   (*env)->DeleteLocalRef(env, obj);
 }
-jobject _java_build_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args) {
-
+jobject mud_new_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args) {
 
   jmethodID ctor = (*env)->GetMethodID(env, cls, "<init>", signature);  // FIND AN OBJECT CONSTRUCTOR
   if (!ctor) {
@@ -291,6 +290,7 @@ Java_Args* _java_args_new_ptr(int argAmnt) {
   return argsPtr;
 }
 jclass mud_get_class_of_obj(JNIEnv* env, jobject obj) {
+//  printf("Getting cls for %p\n", obj);
   return (*env)->GetObjectClass(env, obj);
 }
 Java_Typed_Val _java_call_static_method_named(JNIEnv* env,
@@ -385,9 +385,6 @@ struct Java_String_Resp _java_string_new(JNIEnv *env, const char* msg) {
 }
 
 
-
-
-
 jmethodID mud_get_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature) {
   return (*env)->GetMethodID(env, cls,
                              methodName,
@@ -395,14 +392,16 @@ jmethodID mud_get_method(JNIEnv* env, jclass cls, const char* methodName, const 
 }
 
 jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature) {
+
+//  printf("Getting static method %s with type signature %s in class %p \n", methodName, signature, cls);
+
   return (*env)->GetStaticMethodID(env, cls,
                                    methodName,
                                    signature);
 }
 
-struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type) {
-  struct JavaCallResp_S result;
-  return mud_call_handler(env, obj, method, args, type, true);
+struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jclass cls, jmethodID method, const jvalue* args, Java_Type type) {
+  return mud_call_handler(env, cls, method, args, type, true);
 }
 
 struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type) {
