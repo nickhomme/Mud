@@ -13,4 +13,12 @@ public class MethodTypeSignature : JavaObject
             CustomType = "sun.reflect.generics.tree.TypeSignature"
         }
     });
+    
+    public JavaObject[] getExceptionTypes() => CallNamedReturn<JavaObject[]>("getExceptionTypes", new(JavaType.Object)
+    {
+        ArrayType = new(JavaType.Object)
+        {
+            CustomType = "sun.reflect.generics.tree.FieldTypeSignature"
+        }
+    });
 }

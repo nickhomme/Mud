@@ -8,8 +8,6 @@
 
 #include "java-arg.h"
 #include "../src/memory-util.h"
-void hello();
-
 
 
 struct JavaCallResp_S {
@@ -18,12 +16,10 @@ struct JavaCallResp_S {
   jvalue value;
 };
 
-static jthrowable _java_jvm_check_exception(JNIEnv* env) {
+static jthrowable mud_jvm_check_exception(JNIEnv* env) {
   if (!(*env)->ExceptionCheck(env)) {
-    puts("Is NOT Exception");
     return null;
   }
-  puts("Is DEF Exception");
   printf("[Exception]:\n");
   (*env)->ExceptionDescribe(env);
   jthrowable ex = (*env)->ExceptionOccurred(env);
@@ -31,40 +27,36 @@ static jthrowable _java_jvm_check_exception(JNIEnv* env) {
   return ex;
 }
 
-void _java_release_object(JNIEnv* env, jobject obj);
+__attribute__((unused)) void mud_release_object(JNIEnv* env, jobject obj);
 
-void interop_free(ptr pointer);
+__attribute__((unused)) void interop_free(ptr pointer);
 
-static const char* _java_jstring_to_string(JNIEnv* env, jstring message) {
-  return (*env)->GetStringUTFChars(env, message, 0);
-}
-
-void _java_string_release(JNIEnv* env, jstring message, const char* msgChars);
+__attribute__((unused)) void mud_string_release(JNIEnv* env, jstring message, const char* msgChars);
 
 //static JNIEXPORT void Java_Natives_printf(JNIEnv *env, jobject obj, jstring message) {
-//  std::string msg = _java_jstring_to_string(message);
+//  std::string msg = mud_jstring_to_string(message);
 //  printf("%s\n", msg);
 //}
-typedef struct _Java_JVM_Instance {
+typedef struct Java_JVM_Instance_S {
   JavaVM* jvm;
   JNIEnv* env;
 } Java_JVM_Instance;
 
-JavaVMOption* _java_jvm_options(size_t amnt);
+__attribute__((unused)) JavaVMOption* mud_jvm_options(size_t amnt);
 
-JavaVMOption* _java_jvm_options_va(size_t amnt, ...);
-JavaVMOption* _java_jvm_options_str_arr(size_t amnt, const char** options);
-Java_JVM_Instance _java_jvm_create_instance(JavaVMOption* options, int amnt);
-void _java_jvm_destroy_instance(JavaVM* jvm);
+__attribute__((unused)) JavaVMOption* mud_jvm_options_va(size_t amnt, ...);
+__attribute__((unused)) JavaVMOption* mud_jvm_options_str_arr(size_t amnt, const char** options);
+__attribute__((unused)) Java_JVM_Instance mud_jvm_create_instance(JavaVMOption* options, int amnt);
+__attribute__((unused)) void mud_jvm_destroy_instance(JavaVM* jvm);
 
 
 
 struct Java_String_Resp {
-  jobject java_ptr;
-  const char* char_ptr;
+  __attribute__((unused)) jobject java_ptr;
+  __attribute__((unused)) const char* char_ptr;
 };
 
-struct Java_String_Resp mud_string_new(JNIEnv *env, const char* msg);
+__attribute__((unused)) struct Java_String_Resp mud_string_new(JNIEnv *env, const char* msg);
 
 //Java_Typed_Val _java_call_method_manual(JNIEnv* env,
 //                                 jobject obj,
@@ -73,30 +65,30 @@ struct Java_String_Resp mud_string_new(JNIEnv *env, const char* msg);
 //                                 const char* argsType);
 
 
-struct Java_Exception_S {
-  char* msg;
-  char* stack_trace;
+struct __attribute__((unused)) Java_Exception_S {
+  __attribute__((unused)) char* msg;
+  __attribute__((unused)) char* stack_trace;
 };
 
-char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod,
+__attribute__((unused)) char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod,
                             jmethodID  getStackMethod, jmethodID exToStringMethod,
                             jmethodID frameToStringMethod, bool isTop);
 
-void _java_add_class_path(JNIEnv* env, const char* path);
-jclass mud_get_class(JNIEnv* env, const char* className);
-jclass mud_get_class_of_obj(JNIEnv* env, jobject obj);
+__attribute__((unused)) void mud_add_class_path(JNIEnv* env, const char* path);
+__attribute__((unused)) jclass mud_get_class(JNIEnv* env, const char* className);
+__attribute__((unused)) jclass mud_get_class_of_obj(JNIEnv* env, jobject obj);
 
-jobject mud_new_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args);
+__attribute__((unused)) jobject mud_new_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args);
 
-jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature);
-jmethodID mud_get_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature);
+__attribute__((unused)) jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature);
+__attribute__((unused)) jmethodID mud_get_method(JNIEnv* env, jclass cls, const char* methodName, const char* signature);
 
 
 
 static jvalue map_value(Java_Type type, ptr val) {
   jvalue value = {};
   if (type == Java_Bool) {
-    value.b = *((jbyte*)val);
+    value.z = *((jbyte*)val);
   } else if (type == Java_Int) {
     value.i = *((jint*)val);
   } else if (type == Java_Long) {
@@ -118,15 +110,14 @@ static jvalue map_value(Java_Type type, ptr val) {
 }
 static struct JavaCallResp_S map_call_result(JNIEnv* env, Java_Type type, ptr val) {
   struct JavaCallResp_S result = {
-    .is_exception = false,
-    .is_void = false,
-    .value = map_value(type, val),
+      .is_exception = false,
+      .is_void = false,
+      .value = map_value(type, val),
   };
   if (type == Java_Void) {
     result.is_void = true;
   }
-  jthrowable exception = _java_jvm_check_exception(env);
-  printf("Excption???? [%i]\n", !!exception);
+  jthrowable exception = mud_jvm_check_exception(env);
   if (exception) {
     result.value.l = exception;
     result.is_exception = true;
@@ -137,8 +128,7 @@ static struct JavaCallResp_S map_call_result(JNIEnv* env, Java_Type type, ptr va
 static struct JavaCallResp_S mud_call_handler(JNIEnv* env, ptr objOrCls, jmethodID method, const jvalue* args, Java_Type type, bool isStatic) {
 #define call(name) (isStatic ? (*env)->CallStatic##name##MethodA : (*env)->Call##name##MethodA)(env, objOrCls, method, args)
 #define retCallMap(name, jtype) jtype val = call(name); return map_call_result(env, type, &val);
-  struct JavaCallResp_S result;
-  printf("Calling %s Method: %p with return of %i on %p\n", isStatic ? "static" : "member", method, type, objOrCls);
+//  printf("Calling %s Method: %p with return of %i on %p\n", isStatic ? "static" : "member", method, type, objOrCls);
 
   if (type == Java_Bool) {
     retCallMap(Boolean, jboolean)
@@ -165,59 +155,59 @@ static struct JavaCallResp_S mud_call_handler(JNIEnv* env, ptr objOrCls, jmethod
 
 }
 
-struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type);
+struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jobject obj, jmethodID method, Java_Type type, const jvalue* args);
 
-struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type);
+struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, Java_Type type, const jvalue* args);
 
-static struct JavaCallResp_S mud_call_method_by_name(JNIEnv* env, jclass cls, const char* methodName, const char* signature, const jvalue* args, Java_Type type) {
+__attribute__((unused)) static struct JavaCallResp_S mud_call_method_by_name(JNIEnv* env, jclass cls, const char* methodName, const char* signature, Java_Type type, const jvalue* args) {
 
-  return mud_call_method(env, cls, mud_get_method(env, cls, methodName, signature), args, type);
+  return mud_call_method(env, cls, mud_get_method(env, cls, methodName, signature), type, args);
 }
 
-static struct JavaCallResp_S mud_call_static_method_by_name(JNIEnv* env, jclass cls, const char* methodName, const char* signature, const jvalue* args, Java_Type type) {
+__attribute__((unused)) static struct JavaCallResp_S mud_call_static_method_by_name(JNIEnv* env, jclass cls, const char* methodName, const char* signature, Java_Type type, const
+    jvalue* args) {
 
-  return mud_call_static_method(env, cls, mud_get_static_method(env, cls, methodName, signature), args, type);
+  return mud_call_static_method(env, cls, mud_get_static_method(env, cls, methodName, signature), type, args);
 }
 
 
-char* mud_jstring_to_string(JNIEnv* env, jstring jstr);
+__attribute__((unused)) char* mud_jstring_to_string(JNIEnv* env, jstring jstr);
 
-jfieldID mud_get_field_id(JNIEnv* env, jclass cls, const char* field, const char* signature);
+__attribute__((unused)) jfieldID mud_get_field_id(JNIEnv* env, jclass cls, const char* field, const char* signature);
 
 static jvalue mud_field_handler(JNIEnv* env, ptr objOrCls, jfieldID field, Java_Type type, bool isStatic) {
 #define get(name) (isStatic ? (*env)->GetStatic##name##Field : (*env)->Get##name##Field)(env, objOrCls, field)
-#define retGetMap(name, jtype) return (jvalue) get(name);
-  struct JavaCallResp_S result;
+#define retFieldGetMap(name, jtype) return (jvalue) get(name);
 
   if (type == Java_Bool) {
-    retGetMap(Boolean, jboolean)
+    retFieldGetMap(Boolean, jboolean)
   } else if (type == Java_Int) {
-    retGetMap(Int, jint)
+    retFieldGetMap(Int, jint)
   } else if (type == Java_Long) {
-    retGetMap(Long, jlong)
+    retFieldGetMap(Long, jlong)
   } else if (type == Java_Byte) {
-    retGetMap(Byte, jbyte)
+    retFieldGetMap(Byte, jbyte)
   } else if (type == Java_Char) {
-    retGetMap(Char, jchar)
+    retFieldGetMap(Char, jchar)
   } else if (type == Java_Short) {
-    retGetMap(Short, jshort)
+    retFieldGetMap(Short, jshort)
   } else if (type == Java_Float) {
-    retGetMap(Float, jfloat)
+    retFieldGetMap(Float, jfloat)
   } else if (type == Java_Double) {
-    retGetMap(Double, jdouble)
+    retFieldGetMap(Double, jdouble)
   } else {
-    retGetMap(Object, jobject)
+    retFieldGetMap(Object, jobject)
   }
 
 }
 
 
-jvalue mud_get_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type);
-jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_Type type);
-bool mud_instance_of(JNIEnv* env, jobject obj, jclass cls);
+__attribute__((unused)) jvalue mud_get_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type);
+__attribute__((unused)) jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_Type type);
+__attribute__((unused)) bool mud_instance_of(JNIEnv* env, jobject obj, jclass cls);
 
-size_t mud_array_length(JNIEnv* env, jarray arr);
-jvalue mud_array_get_at(JNIEnv* env, jarray arr, int index, Java_Type type);
+__attribute__((unused)) size_t mud_array_length(JNIEnv* env, jarray arr);
+__attribute__((unused)) jvalue mud_array_get_at(JNIEnv* env, jarray arr, int index, Java_Type type);
 //jvalue* mud_array_get_all(JNIEnv* env, jarray arr, Java_Type type);
 
 #endif //MUD_LIBRARY_H

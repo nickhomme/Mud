@@ -2,12 +2,14 @@
 #include "../include/mud.h"
 
 
-JavaVMOption* _java_jvm_options(size_t amnt) {
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "OCUnusedGlobalDeclarationInspection"
+JavaVMOption* mud_jvm_options(size_t amnt) {
   return malloc(sizeof(JavaVMOption) * amnt);
 }
 
-JavaVMOption* _java_jvm_options_va(size_t amnt, ...) {
-  JavaVMOption* options = _java_jvm_options(amnt);
+JavaVMOption* mud_jvm_options_va(size_t amnt, ...) {
+  JavaVMOption* options = mud_jvm_options(amnt);
   va_list argsList;
   va_start(argsList, amnt);
   for (size_t i = 0; i < amnt; i++) {
@@ -20,10 +22,10 @@ JavaVMOption* _java_jvm_options_va(size_t amnt, ...) {
   return options;
 }
 
-JavaVMOption* _java_jvm_options_str_arr(size_t amnt, const char** optionArgs) {
-  JavaVMOption* options = _java_jvm_options(amnt);
+JavaVMOption* mud_jvm_options_str_arr(size_t amnt, const char** optionsArr) {
+  JavaVMOption* options = mud_jvm_options(amnt);
   for (size_t i = 0; i < amnt; i++) {
-    const char* arg = optionArgs[i];
+    const char* arg = optionsArr[i];
     size_t len = strlen(arg);
     options[i].optionString = malloc(sizeof(char) * len + 1);
     strcpy(options[i].optionString, arg);
@@ -31,7 +33,7 @@ JavaVMOption* _java_jvm_options_str_arr(size_t amnt, const char** optionArgs) {
   return options;
 }
 
-Java_JVM_Instance _java_jvm_create_instance(JavaVMOption* options, int optionsAmnt) {
+Java_JVM_Instance mud_jvm_create_instance(JavaVMOption* options, int amnt) {
 //  printf("Creating JVMdd with args: %s\n", args);
 //  const size_t argsLen = strlen(args);
 //  char* argsCpy = (char*) malloc(sizeof(char) * (argsLen + 1));
@@ -40,10 +42,10 @@ Java_JVM_Instance _java_jvm_create_instance(JavaVMOption* options, int optionsAm
 //================== prepare loading of Java VM ============================
   JavaVMInitArgs vm_args;                        // Initialization arguments
   vm_args.options = options;
-  vm_args.nOptions = optionsAmnt;                          // number of options
+  vm_args.nOptions = amnt;                          // number of options
 
   printf("Creating JVM with args:\n");
-  for (int i = 0; i < optionsAmnt; ++i) {
+  for (int i = 0; i < amnt; ++i) {
     printf("\t%s\n", options[i].optionString);
   }
 
@@ -62,7 +64,7 @@ Java_JVM_Instance _java_jvm_create_instance(JavaVMOption* options, int optionsAm
   if (rc != JNI_OK) {
     // TO DO: error processing...
 //    std::cin.get();
-//    if (_java_jvm_check_exception(env, *env));
+//    if (mud_jvm_check_exception(env, *env));
     exit(EXIT_FAILURE);
   }
   //=============== Display JVM version =======================================
@@ -73,7 +75,7 @@ Java_JVM_Instance _java_jvm_create_instance(JavaVMOption* options, int optionsAm
   return instance;
 }
 
-void _java_add_class_path(JNIEnv* env, const char* path) {
+void mud_add_class_path(JNIEnv* env, const char* path) {
 //  char urlPath[2048];
 //  sprintf(urlPath, "file://%s", path);
   printf("Adding %s to the classpath\n", path);
@@ -89,7 +91,7 @@ void _java_add_class_path(JNIEnv* env, const char* path) {
   jstring urlPathStrObj = (*env)->NewStringUTF(env,  path);
   jobject urlInstance = (*env)->NewObject(env, urlCls, urlConstructor, urlPathStrObj);
   (*env)->CallVoidMethod(env, classLoaderInstance, addUrlMethod, urlInstance);
-//  _java_string_release(env, urlPathStrObj, urlPath);
+//  mud_string_release(env, urlPathStrObj, urlPath);
   printf("Added %s to the classpath\n", path);
 }
 
@@ -99,11 +101,11 @@ jclass mud_get_class(JNIEnv* env, const char* className) {
     printf("Error: Class %s not found\n", className);
     exit(1);
   }
-//  _java_jvm_check_exception(env);
+//  mud_jvm_check_exception(env);
   return cls;
 }
 
-void _java_release_object(JNIEnv* env, jobject obj) {
+__attribute__((unused)) void mud_release_object(JNIEnv* env, jobject obj) {
   (*env)->DeleteLocalRef(env, obj);
 }
 jobject mud_new_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args) {
@@ -121,7 +123,7 @@ jobject mud_new_object(JNIEnv* env, jclass cls, const char* signature, const jva
   return obj;
 }
 
-void _java_jvm_destroy_instance(JavaVM* jvm) {
+void mud_jvm_destroy_instance(JavaVM* jvm) {
   (*jvm)->DestroyJavaVM(jvm);
   printf("JVM destroyed\n");
 }
@@ -131,12 +133,12 @@ jclass mud_get_class_of_obj(JNIEnv* env, jobject obj) {
   return (*env)->GetObjectClass(env, obj);
 }
 
-void interop_free(ptr pointer) {
+__attribute__((unused)) void interop_free(ptr pointer) {
   safe_free(pointer);
 }
-void _java_string_release(JNIEnv* env, jstring message, const char* msgChars) {
+void mud_string_release(JNIEnv* env, jstring message, const char* msgChars) {
   (*env)->ReleaseStringUTFChars(env, message, msgChars);
-//  _java_release_object(env, message);
+//  mud_release_object(env, message);
 }
 
 
@@ -180,17 +182,19 @@ jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName,
                                    signature);
 }
 
-struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jclass cls, jmethodID method, const jvalue* args, Java_Type type) {
+struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jclass cls, jmethodID method, Java_Type type, const jvalue* args) {
   return mud_call_handler(env, cls, method, args, type, true);
 }
 
-struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, const jvalue* args, Java_Type type) {
-  return mud_call_handler(env, obj, method, args, type, false);
+struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, Java_Type type, const jvalue* args) {
+  struct JavaCallResp_S resp = mud_call_handler(env, obj, method, args, type, false);
+//  printf("Resp: {.ex: _%i_; .vd: _%i_; .val: {.l: _%p_};}\n", resp.is_exception, resp.is_void, resp.value.l);
+  return resp;
 }
 
 char* mud_jstring_to_string(JNIEnv* env, jstring jstr) {
 
-  const char* backingStr = _java_jstring_to_string(env, jstr);
+  const char* backingStr = (*env)->GetStringUTFChars(env, jstr, 0);
   const size_t len = strlen(backingStr);
   char* copyStr = malloc(sizeof(char) * (len + 1));
   memcpy(copyStr, backingStr, len);
@@ -220,9 +224,6 @@ size_t mud_array_length(JNIEnv* env, jarray arr) {
 
 jvalue mud_array_get_at(JNIEnv* env, jarray arr, int index, Java_Type type) {
 #define retGetMap(name, jtype) jtype val; (*env)->Get##name##ArrayRegion(env, arr, index, 1, &val); return map_value(type, &val);
-  jboolean a;
-
-  struct JavaCallResp_S result;
   if (type == Java_Bool) {
     retGetMap(Boolean, jboolean)
   } else if (type == Java_Int) {
@@ -250,10 +251,10 @@ jvalue mud_array_get_at(JNIEnv* env, jarray arr, int index, Java_Type type) {
 //  (*env)->GetEle(env, arr, index)
 //}
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "misc-no-recursion"
 char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod, jmethodID  getStackMethod, jmethodID exToStringMethod, jmethodID frameToStringMethod,
                             bool isTop) {
-
-   return calloc(1, sizeof(char));
 
   char msg[2048];
   memset(msg, 0, 2048);
@@ -295,7 +296,7 @@ char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod
   // Append stack trace messages if there are any.
   if (frames_length > 0)
   {
-    jsize i = 0;
+    jsize i;
     for (i = 0; i < frames_length; i++)
     {
       // Get the string returned from the 'toString()'
@@ -346,3 +347,5 @@ char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod
   finalMsg[len] = '\0';
   return finalMsg;
 }
+#pragma clang diagnostic pop
+#pragma clang diagnostic pop

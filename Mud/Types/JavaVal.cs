@@ -3,19 +3,23 @@ using System.Runtime.InteropServices;
 
 namespace Mud.Types;
 
-internal struct JavaCallResp
+public struct JavaCallResp
 {
+    [MarshalAs(UnmanagedType.U1)]
     public bool IsVoid;
+    [MarshalAs(UnmanagedType.U1)]
     public bool IsException;
     public JavaVal Value;
+    // [FieldOffset(3)]
 }
 
 
 [StructLayout(LayoutKind.Explicit)]
-internal struct JavaVal
+public struct JavaVal
 {
     [FieldOffset(0)]
-    public byte Bool;
+    [MarshalAs(UnmanagedType.U1)]
+    public bool Bool;
     [FieldOffset(0)]
     public byte Byte;
     [FieldOffset(0)]
@@ -52,11 +56,7 @@ internal struct JavaVal
                 arg.Byte = v;
                 break;
             case bool v:
-#if !NET7_0_OR_GREATER
-                arg.Bool = v ? byte.One : byte.Zero);
-#else
-                arg.Bool = (byte)(v ? 1 : 0);
-#endif
+                arg.Bool = v;
                 break;
             case char v:
                 arg.Char = v;

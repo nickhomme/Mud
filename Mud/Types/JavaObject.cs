@@ -69,7 +69,7 @@ public class JavaObject : DynamicObject, IDisposable
         });
     }
     
-    internal static string GenSignature(JavaFullType val)
+    public static string GenSignature(JavaFullType val)
     {
         switch (val.Type)
         {
@@ -111,6 +111,10 @@ public class JavaObject : DynamicObject, IDisposable
         return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : GenSignature(returnType))}";
     }
 
+    public static string GenMethodSignature(JavaFullType? returnType, params JavaFullType[] args)
+    {
+        return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : GenSignature(returnType))}";
+    }
     internal static string GenMethodSignature(JavaFullType? returnType, params object[] args)
     {
         return $"({string.Join("", args.Select(GenSignature))}){(returnType == null ? "V" : GenSignature(returnType))}";
