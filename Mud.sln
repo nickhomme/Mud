@@ -6,6 +6,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mud.Test", "Mud.Test\Mud.Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mud.Playground", "Mud.Playground\Mud.Playground.csproj", "{21BE0F70-F73E-4E5C-8CA1-45C57CCCE751}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mud.J6", "Mud.J6\Mud.J6.csproj", "{7897BFD8-F123-4B29-851E-157E0DE97220}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mud.Generator", "Mud.Generator\Mud.Generator.csproj", "{26EA3444-A138-405D-A4B3-C230892F3596}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +28,13 @@ Global
 		{21BE0F70-F73E-4E5C-8CA1-45C57CCCE751}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{21BE0F70-F73E-4E5C-8CA1-45C57CCCE751}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{21BE0F70-F73E-4E5C-8CA1-45C57CCCE751}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7897BFD8-F123-4B29-851E-157E0DE97220}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7897BFD8-F123-4B29-851E-157E0DE97220}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7897BFD8-F123-4B29-851E-157E0DE97220}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7897BFD8-F123-4B29-851E-157E0DE97220}.Release|Any CPU.Build.0 = Release|Any CPU
+		{26EA3444-A138-405D-A4B3-C230892F3596}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{26EA3444-A138-405D-A4B3-C230892F3596}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{26EA3444-A138-405D-A4B3-C230892F3596}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{26EA3444-A138-405D-A4B3-C230892F3596}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
