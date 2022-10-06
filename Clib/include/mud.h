@@ -45,7 +45,7 @@ typedef struct Java_JVM_Instance_S {
 __attribute__((unused)) JavaVMOption* mud_jvm_options(size_t amnt);
 
 __attribute__((unused)) JavaVMOption* mud_jvm_options_va(size_t amnt, ...);
-__attribute__((unused)) JavaVMOption* mud_jvm_options_str_arr(size_t amnt, const char** options);
+JavaVMOption* mud_jvm_options_str_arr(size_t amnt, const char** options);
 __attribute__((unused)) Java_JVM_Instance mud_jvm_create_instance(JavaVMOption* options, int amnt);
 __attribute__((unused)) void mud_jvm_destroy_instance(JavaVM* jvm);
 
@@ -175,7 +175,29 @@ __attribute__((unused)) char* mud_jstring_to_string(JNIEnv* env, jstring jstr);
 
 __attribute__((unused)) jfieldID mud_get_field_id(JNIEnv* env, jclass cls, const char* field, const char* signature);
 
-static jvalue mud_field_handler(JNIEnv* env, ptr objOrCls, jfieldID field, Java_Type type, bool isStatic) {
+static void mud_set_field_handler(JNIEnv* env, ptr objOrCls, jfieldID field, Java_Type type, jvalue value, bool isStatic) {
+#define set(name, val) (isStatic ? (*env)->SetStatic##name##Field : (*env)->Set##name##Field)(env, objOrCls, field, val);
+  if (type == Java_Bool) {
+    set(Boolean, value.z)
+  } else if (type == Java_Int) {
+    set(Int, value.i)
+  } else if (type == Java_Long) {
+    set(Long, value.j)
+  } else if (type == Java_Byte) {
+    set(Byte, value.b)
+  } else if (type == Java_Char) {
+    set(Char, value.c)
+  } else if (type == Java_Short) {
+    set(Short, value.s)
+  } else if (type == Java_Float) {
+    set(Float, value.f)
+  } else if (type == Java_Double) {
+    set(Double, value.d)
+  } else {
+    set(Object, value.l)
+  }
+}
+static jvalue mud_get_field_handler(JNIEnv* env, ptr objOrCls, jfieldID field, Java_Type type, bool isStatic) {
 #define get(name) (isStatic ? (*env)->GetStatic##name##Field : (*env)->Get##name##Field)(env, objOrCls, field)
 #define retFieldGetMap(name, jtype) return (jvalue) get(name);
 
@@ -203,7 +225,9 @@ static jvalue mud_field_handler(JNIEnv* env, ptr objOrCls, jfieldID field, Java_
 
 
 __attribute__((unused)) jvalue mud_get_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type);
+__attribute__((unused)) void mud_set_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type, jvalue value);
 __attribute__((unused)) jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_Type type);
+__attribute__((unused)) void mud_set_static_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type, jvalue value);
 __attribute__((unused)) bool mud_instance_of(JNIEnv* env, jobject obj, jclass cls);
 
 __attribute__((unused)) size_t mud_array_length(JNIEnv* env, jarray arr);

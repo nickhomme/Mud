@@ -7,40 +7,41 @@ using Mud.Types;
 
 namespace Mud;
 
-public class Jvm : IDisposable
+public static class Jvm
 {
-    internal JvmInstance Instance { get; }
-    internal Dictionary<string, ClassInfo> ClassInfos { get; } = new();
+    internal static JvmInstance Instance { get; private set; }
+    internal static Dictionary<string, ClassInfo> ClassInfos { get; } = new();
+    private static List<IntPtr> ObjPointers { get; } = new();
 
 
-    public Jvm(params string[] args)
+    public static void Initialize(params string[] args)
     {
         var options = MudInterface.gen_options(args.Length, args);
         Instance = MudInterface.create_instance(options, args.Length);
         MudInterface.interop_free(options);
     }
 
-
-    public ClassInfo GetClass(string classPath)
+    public static ClassInfo GetClass(string classPath)
     {
         classPath = classPath.Replace(".", "/");
         if (!ClassInfos.TryGetValue(classPath, out var info))
         {
             var cls = MudInterface.get_class(Instance.Env, classPath);
+            ObjPointers.Add(cls);
             // Console.WriteLine($"GetClass `{classPath}`::{cls.HexAddress()}");
-            info = new ClassInfo(this, cls, classPath);
+            info = new ClassInfo(cls, classPath);
             ClassInfos[classPath] = info;
         }
 
         return info;
     }
 
-    internal JavaString JavaString(string str)
+    internal static JavaString JavaString(string str)
     {
         return MudInterface.string_new(Instance.Env, str);
     }
 
-    internal void UsingArgs(IEnumerable<object> args, Action<JavaVal[]> action)
+    internal static void UsingArgs(IEnumerable<object> args, Action<JavaVal[]> action)
     {
         var jStrings = new List<JavaString>();
         var jArgs = args.Select(a =>
@@ -65,7 +66,7 @@ public class Jvm : IDisposable
                 foreach (var javaString in jStrings)
                 {
                     MudInterface.string_release(Instance.Env, javaString.JavaPtr, javaString.CharArrPtr);
-                }       
+                }
             }
             catch
             {
@@ -75,10 +76,11 @@ public class Jvm : IDisposable
     }
 
 
-    internal string ExtractStr(IntPtr jString, bool releaseStrObj = false)
+    internal static string ExtractStr(IntPtr jString, bool releaseStrObj = false)
     {
         [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jstring_to_string")]
         static extern IntPtr jstring_to_string(IntPtr env, IntPtr jStr);
+
         var mallocStr = jstring_to_string(Instance.Env, jString);
         var str = Marshal.PtrToStringAuto(mallocStr)!;
         MudInterface.interop_free(mallocStr);
@@ -86,49 +88,53 @@ public class Jvm : IDisposable
         {
             MudInterface.release_obj(Instance.Env, jString);
         }
-        return str;
-    } 
 
-    private IntPtr ExceptionCls { get; set; }
-    private IntPtr GetExceptionCauseMethod { get; set; }
-    private IntPtr GetExceptionStackMethod { get; set; }
-    private IntPtr ExceptionToStringMethod { get; set; }
-    private IntPtr FrameCls { get; set; }
-    private IntPtr FrameToStringMethod { get; set; }
-    private string GetException(IntPtr ex)
+        return str;
+    }
+
+    private static IntPtr ExceptionCls { get; set; }
+    private static IntPtr GetExceptionCauseMethod { get; set; }
+    private static IntPtr GetExceptionStackMethod { get; set; }
+    private static IntPtr ExceptionToStringMethod { get; set; }
+    private static IntPtr FrameCls { get; set; }
+    private static IntPtr FrameToStringMethod { get; set; }
+
+    private static string GetException(IntPtr ex)
     {
         if (ExceptionCls == IntPtr.Zero)
         {
             ExceptionCls = MudInterface.get_class(Instance.Env, "java/lang/Throwable");
             FrameCls = MudInterface.get_class(Instance.Env, "java/lang/StackTraceElement");
 
-            GetExceptionCauseMethod = MudInterface.get_method(Instance.Env, ExceptionCls, "getCause", "()Ljava/lang/Throwable;");
-        
-            GetExceptionStackMethod = MudInterface.get_method(Instance.Env, ExceptionCls, "getStackTrace", "()Ljava/lang/StackTraceElement;");
-        
-            ExceptionToStringMethod = MudInterface.get_method(Instance.Env, ExceptionCls, "toString", "()Ljava/lang/String;");
-            
+            GetExceptionCauseMethod =
+                MudInterface.get_method(Instance.Env, ExceptionCls, "getCause", "()Ljava/lang/Throwable;");
+
+            GetExceptionStackMethod = MudInterface.get_method(Instance.Env, ExceptionCls, "getStackTrace",
+                "()Ljava/lang/StackTraceElement;");
+
+            ExceptionToStringMethod =
+                MudInterface.get_method(Instance.Env, ExceptionCls, "toString", "()Ljava/lang/String;");
+
             FrameToStringMethod = MudInterface.get_method(Instance.Env, FrameCls, "toString", "()Ljava/lang/String;");
         }
 
-        var mallocStr = MudInterface.get_exception_msg(Instance.Env, ex, GetExceptionCauseMethod, GetExceptionStackMethod, ExceptionToStringMethod,
+        var mallocStr = MudInterface.get_exception_msg(Instance.Env, ex, GetExceptionCauseMethod,
+            GetExceptionStackMethod, ExceptionToStringMethod,
             FrameToStringMethod, true);
         var str = Marshal.PtrToStringAuto(mallocStr)!;
         MudInterface.interop_free(mallocStr);
         return str;
     }
-    
-    internal T UsingArgs<T>(IEnumerable<object> args, Func<JavaVal[], JavaCallResp> action)
+
+    internal static T UsingArgs<T>(IEnumerable<object> args, Func<JavaVal[], JavaCallResp> action)
     {
         JavaCallResp resp = new();
-        UsingArgs(args, (jArgs) =>
-        {
-            resp = action(jArgs);
-        });
-        
+        UsingArgs(args, (jArgs) => { resp = action(jArgs); });
+
         if (resp.IsException)
         {
             var exceptionMsg = GetException(resp.Value.Object);
+            ObjPointers.Remove(resp.Value.Object);
             MudInterface.release_obj(Instance.Env, resp.Value.Object);
             throw new JavaException(exceptionMsg);
         }
@@ -148,18 +154,18 @@ public class Jvm : IDisposable
     //     
     //     add_class_path(Instance.Env, path);
     // }
-    
-    private ClassInfo GetObjClass(IntPtr obj)
+
+    private static ClassInfo GetObjClass(IntPtr obj)
     {
-        var classInfo = GetClass("java/lang/Class"); 
+        var classInfo = GetClass("java/lang/Class");
         // var getNameMethod = classInfo.GetMethodPtrBySig("getName", "()Ljava/lang/String;", false);
         var cls = MudInterface.get_class_of_obj(Instance.Env, obj);
+        ObjPointers.Add(cls);
         var classPath = classInfo.CallMethod<string>(cls, "getName");
         return GetClass(classPath);
-
     }
 
-    internal object MapJValue(JavaFullType type, Type valType, JavaVal javaVal)
+    internal static object MapJValue(JavaFullType type, Type valType, JavaVal javaVal)
     {
         if (type.Type is JavaType.Object)
         {
@@ -167,11 +173,12 @@ public class Jvm : IDisposable
             {
                 return default!;
             }
+
             if (valType == typeof(string))
             {
                 return ExtractStr(javaVal.Object);
             }
-            
+
             var objCls = GetObjClass(javaVal.Object);
 
             if (valType.IsArray)
@@ -181,16 +188,19 @@ public class Jvm : IDisposable
                 var arrElemType = JavaObject.MapToType(valType.GetElementType()!);
                 for (var i = 0; i < length; i++)
                 {
-                    arr.SetValue(MapJValue(valType.GetElementType()!, MudInterface.array_get_at(Instance.Env, javaVal.Object, i, arrElemType.Type)), i); 
+                    arr.SetValue(
+                        MapJValue(valType.GetElementType()!,
+                            MudInterface.array_get_at(Instance.Env, javaVal.Object, i, arrElemType.Type)), i);
                 }
+
                 return arr;
             }
-            
-            var jObjVal = (JavaObject) Activator.CreateInstance(valType)!;
+
+            var jObjVal = (JavaObject)Activator.CreateInstance(valType)!;
             jObjVal.Info = objCls;
             jObjVal.Env = Instance.Env;
-            jObjVal.Jvm = this;
             jObjVal.SetObj(javaVal.Object);
+            ObjPointers.Add(javaVal.Object);
             return jObjVal;
         }
 
@@ -209,23 +219,25 @@ public class Jvm : IDisposable
 
         return val!;
     }
-    internal object MapJValue(Type valType, JavaVal javaVal)
+
+    internal static object MapJValue(Type valType, JavaVal javaVal)
     {
         return MapJValue(JavaObject.MapToType(valType), valType, javaVal);
     }
 
-    internal T MapJValue<T>(JavaFullType type, JavaVal javaVal)
+    internal static T MapJValue<T>(JavaFullType type, JavaVal javaVal)
     {
-        return (T) MapJValue(type, typeof(T), javaVal);
+        return (T)MapJValue(type, typeof(T), javaVal);
     }
-    internal T MapJValue<T>(JavaVal javaVal)
-    {
-        return (T) MapJValue(typeof(T), javaVal);
-    } 
 
-    private object NewObj(Type type, string? classPath, params object[] args)
+    internal static T MapJValue<T>(JavaVal javaVal)
     {
-        classPath ??= type.GetCustomAttribute<ClassPathAttribute>()?.ClassPath;
+        return (T)MapJValue(typeof(T), javaVal);
+    }
+
+    private static JavaObject NewObj(Type type, string? classPath, params object[] args)
+    {
+        classPath ??= type.GetCustomAttributes<ClassPathAttribute>().FirstOrDefault()?.ClassPath;
         if (string.IsNullOrWhiteSpace(classPath))
         {
             throw new ArgumentException(
@@ -237,148 +249,171 @@ public class Jvm : IDisposable
         classPath = classPath.Replace(".", "/");
         if (!ClassInfos.TryGetValue(classPath, out var info))
         {
-            var cls =  MudInterface.get_class(Instance.Env, classPath);
-            info = new ClassInfo(this, cls, classPath);
+            var cls = MudInterface.get_class(Instance.Env, classPath);
+            info = new ClassInfo(cls, classPath);
             ClassInfos[classPath] = info;
         }
-        
+
         val.Info = info;
         val.Env = Instance.Env;
-        val.Jvm = this;
-        
+
         val.Bind(args);
+        ObjPointers.Add(val.Jobj);
         return val;
     }
-    private T NewObj<T>(params object[] args) where T : JavaObject
+
+    // private static T NewObj<T>(params object[] args) where T : JavaObject
+    // {
+    //     return (T)NewObj(typeof(T), null, args);
+    // }
+    //
+    // public static JavaObject NewObj(string classPath, params object[] args) => NewObj<JavaObject>(classPath, args);
+    //
+    // public static T NewObj<T>(string classPath, params object[] args) where T : JavaObject
+    // {
+    //     return (T)NewObj(typeof(T), classPath, args);
+    // }
+
+    // public static T NewObj<T>() where T : JavaObject =>
+    //     NewObj<T>(typeof(T).GetCustomAttribute<ClassPathAttribute>()?.ClassPath!);
+
+
+    public static void ReleaseObj(JavaObject obj)
     {
-        return (T) NewObj(typeof(T), null, args);
+        ObjPointers.Remove(obj.Jobj);
+        MudInterface.release_obj(Instance.Env, obj.Jobj);
     }
 
-    public JavaObject NewObj(string classPath, params object[] args) => NewObj<JavaObject>(classPath, args);
-    
-    public T NewObj<T>(string classPath, params object[] args) where T : JavaObject
+    public static void Destroy()
     {
-        return (T) NewObj(typeof(T), classPath, args);
-    }
-
-    public T NewObj<T>() where T : JavaObject =>
-        NewObj<T>(typeof(T).GetCustomAttribute<ClassPathAttribute>()?.ClassPath!);
-    
-    public void Dispose()
-    {
-        Instance.Dispose();
+        var pointers = ObjPointers.Concat(ClassInfos.Values.SelectMany(c =>
+        {
+            var clsPointers = c.Props.Values.Concat(c.Methods.Values.SelectMany(m => m.Values));
+            c.Methods.Clear();
+            c.Props.Clear();
+            return clsPointers;
+        })).ToList();
+        
+        pointers.ForEach(ptr =>
+        {
+            MudInterface.release_obj(Instance.Env, ptr);
+        });
+        ObjPointers.Clear();
+        MudInterface.destroy_instance(Instance.Jvm);
     }
 }
 
 
-internal struct JvmInstance : IDisposable
+public struct JvmInstance
 {
-    public IntPtr Jvm { get; init; }
-    public IntPtr Env { get; init; }
-    
-    
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jvm_destroy_instance")]
-    private static extern void destroy_instance(IntPtr jvm);
-    
-    public void Dispose()
-    {
-        destroy_instance(Jvm);
-    }
+    internal IntPtr Jvm { get; init; }
+    internal IntPtr Env { get; init; }
 }
-
 
 internal static class MudInterface
 {
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jvm_create_instance")]
     internal static extern JvmInstance create_instance(IntPtr options, int optionsAmnt);
-    
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jvm_options_str_arr", CallingConvention = CallingConvention.Cdecl)]
+
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jvm_options_str_arr",
+        CallingConvention = CallingConvention.Cdecl)]
     internal static extern IntPtr gen_options(int amnt, string[] options);
-    
-    
+
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "interop_free")]
     internal static extern void interop_free(IntPtr ptr);
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_exception_msg")]
-    internal static extern IntPtr get_exception_msg(IntPtr env, IntPtr ex, IntPtr getCauseMethod, IntPtr getStackMethod, IntPtr exToStringMethod, IntPtr frameToStringMethod, bool isTop);
-    
+    internal static extern IntPtr get_exception_msg(IntPtr env, IntPtr ex, IntPtr getCauseMethod, IntPtr getStackMethod,
+        IntPtr exToStringMethod, IntPtr frameToStringMethod, bool isTop);
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_string_new")]
     internal static extern JavaString string_new(IntPtr env, string str);
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_string_release")]
     internal static extern void string_release(IntPtr env, IntPtr jString, IntPtr charStr);
- 
-    
+
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_method")]
     internal static extern IntPtr get_method(IntPtr env, IntPtr cls, string methodName, string signature);
-    
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_static_method", CallingConvention = CallingConvention.Cdecl)]
-    internal static extern JavaCallResp call_static_method(IntPtr env, IntPtr cls, IntPtr method, JavaType type, JavaVal[] args);
-    
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_method", CallingConvention = CallingConvention.Cdecl)]
-    internal static extern JavaCallResp call_method(IntPtr env, IntPtr obj, IntPtr method, JavaType type, JavaVal[] args);
-    
-    
-    
-    
+
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_static_method",
+        CallingConvention = CallingConvention.Cdecl)]
+    internal static extern JavaCallResp call_static_method(IntPtr env, IntPtr cls, IntPtr method, JavaType type,
+        JavaVal[] args);
+
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_method",
+        CallingConvention = CallingConvention.Cdecl)]
+    internal static extern JavaCallResp call_method(IntPtr env, IntPtr obj, IntPtr method, JavaType type,
+        JavaVal[] args);
+
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_build_class_object")]
     internal static extern IntPtr build_obj_by_path(IntPtr env, string classPath);
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_new_object")]
     internal static extern IntPtr new_obj(IntPtr env, IntPtr jClass, string sig, [In, Out] JavaVal[] args);
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_class")]
     internal static extern IntPtr get_class(IntPtr env, string classPath);
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_class_of_obj")]
     internal static extern IntPtr get_class_of_obj(IntPtr env, IntPtr obj);
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_static_method")]
     internal static extern IntPtr get_static_method(IntPtr env, IntPtr cls, string methodName, string signature);
-    
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_method_by_name")]
-    internal static extern JavaCallResp call_method(IntPtr env, IntPtr obj, string method, string signature, JavaType type, JavaVal[] args);
-    
 
-    
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_method_by_name")]
+    internal static extern JavaCallResp call_method(IntPtr env, IntPtr obj, string method, string signature,
+        JavaType type, JavaVal[] args);
+
+
     internal static JavaCallResp call_method(IntPtr env, IntPtr obj, IntPtr method, JavaType type) =>
         call_method(env, obj, method, type, Array.Empty<JavaVal>());
-    
+
     internal static JavaCallResp call_method(IntPtr env, IntPtr cls, string method, string signature, JavaType type) =>
         call_method(env, cls, method, signature, type, Array.Empty<JavaVal>());
-    
 
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_static_method_by_name")]
-    internal static extern JavaCallResp call_static_method(IntPtr env, IntPtr cls, string method, string signature, JavaType type, JavaVal[] args);
+    internal static extern JavaCallResp call_static_method(IntPtr env, IntPtr cls, string method, string signature,
+        JavaType type, JavaVal[] args);
 
-    internal static JavaCallResp call_static_method(IntPtr env, IntPtr cls, string method, string signature, JavaType type) =>
+    internal static JavaCallResp call_static_method(IntPtr env, IntPtr cls, string method, string signature,
+        JavaType type) =>
         call_static_method(env, cls, method, signature, type, Array.Empty<JavaVal>());
-    
-    
-    
+
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_field_id")]
     internal static extern IntPtr get_field(IntPtr env, IntPtr cls, string name, string signature);
     
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_field_value")]
     internal static extern JavaVal get_field_value(IntPtr env, IntPtr obj, IntPtr field, JavaType type);
     
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_set_field_value")]
+    internal static extern void set_field_value(IntPtr env, IntPtr obj, IntPtr field, JavaType type, JavaVal val);
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_static_field_value")]
     internal static extern JavaVal get_static_field_value(IntPtr env, IntPtr cls, IntPtr field, JavaType type);
     
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_set_static_field_value")]
+    internal static extern void set_static_field_value(IntPtr env, IntPtr obj, IntPtr field, JavaType type, JavaVal val);
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_release_object")]
     internal static extern void release_obj(IntPtr env, IntPtr obj);
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_instance_of")]
     internal static extern bool instance_of(IntPtr env, IntPtr obj, IntPtr cls);
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_array_length")]
     internal static extern int array_length(IntPtr env, IntPtr obj);
-    
+
     [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_array_get_at")]
     internal static extern JavaVal array_get_at(IntPtr env, IntPtr arr, int index, JavaType type);
+    
+    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jvm_destroy_instance")]
+    internal static extern void destroy_instance(IntPtr jvm);
 }
-
 
 static class IntPtrExtensions
 {

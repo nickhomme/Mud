@@ -5,15 +5,13 @@ namespace Mud;
 
 public class ClassInfo
 {
-    internal Jvm Jvm { get; }
     internal IntPtr Cls { get; }
     public string ClassPath { get; }
     internal Dictionary<string, Dictionary<string, IntPtr>> Methods { get; } = new();
     internal Dictionary<string, IntPtr> Props { get; } = new();
 
-    public ClassInfo(Jvm jvm, IntPtr cls, string classPath)
+    public ClassInfo(IntPtr cls, string classPath)
     {
-        Jvm = jvm;
         Cls = cls;
         ClassPath = classPath;
     }
@@ -107,9 +105,30 @@ public class ClassInfo
     {
         return GetMethodPtr(isStatic, (string?) null, method, args);
     }
+    
+    public T CallMethodBySig<T>(IntPtr obj, string method, string signature, params object[] args)
+    {
+        return Jvm.UsingArgs<T>(args, jArgs =>
+        {
+            var methodPtr = GetMethodPtrBySig(method, signature, false);
+            var resp = MudInterface.call_method(Jvm.Instance.Env, obj, methodPtr, JavaObject.MapToType(typeof(T)).Type, jArgs);
+
+            return resp;
+        });
+    }
+    
+    public void CallMethodBySig(IntPtr obj, string method, string signature, params object[] args)
+    {
+        Jvm.UsingArgs(args, jArgs =>
+        {
+            var methodPtr = GetMethodPtrBySig(method, signature, false);
+            var resp = MudInterface.call_method(Jvm.Instance.Env, obj, methodPtr, JavaType.Void, jArgs);
+        });
+    }
 
     public JavaObject CallMethodNamedReturn(IntPtr obj, string method, JavaFullType returnType, params object[] args) =>
         CallMethodNamedReturn<JavaObject>(obj, method, returnType, args); 
+    
     public T CallMethodNamedReturn<T>(IntPtr obj, string method, JavaFullType returnType, params object[] args)
     {
         return Jvm.UsingArgs<T>(args, jArgs =>
@@ -132,6 +151,26 @@ public class ClassInfo
     public void CallMethod(IntPtr obj, string method, params object[] args)
     {
         Jvm.UsingArgs(args, jArgs => MudInterface.call_method(Jvm.Instance.Env, obj, GetVoidMethodPtr(false, method, args), JavaType.Void, jArgs));
+    }
+    
+    
+    public T CallStaticMethodBySig<T>(IntPtr obj, string method, string signature, params object[] args)
+    {
+        return Jvm.UsingArgs<T>(args, jArgs =>
+        {
+            var methodPtr = GetMethodPtrBySig(method, signature, true);
+            var resp = MudInterface.call_method(Jvm.Instance.Env, obj, methodPtr, JavaObject.MapToType(typeof(T)).Type, jArgs);
+            return resp;
+        });
+    }
+    
+    public void CallStaticMethodBySig(IntPtr obj, string method, string signature, params object[] args)
+    {
+        Jvm.UsingArgs(args, jArgs =>
+        {
+            var methodPtr = GetMethodPtrBySig(method, signature, true);
+            MudInterface.call_method(Jvm.Instance.Env, obj, methodPtr, JavaType.Void, jArgs);
+        });
     }
     
     public T CallStaticMethod<T>(string method, params object[] args)
@@ -192,6 +231,26 @@ public class ClassInfo
         var fieldPtr = GetFieldPtr<T>(name);
         type ??= JavaObject.MapToType(typeof(T));
         return Jvm.MapJValue<T>(type, MudInterface.get_static_field_value(Jvm.Instance.Env, Cls, fieldPtr, type.Type));
+    }
+    
+    public void SetField<T>(IntPtr obj, string name, T value, JavaFullType? type = null)
+    {
+        var fieldPtr = GetFieldPtr<T>(name);
+        type ??= JavaObject.MapToType(typeof(T));
+        Jvm.UsingArgs(new object[] { value! }, jArgs =>
+        {
+            MudInterface.set_field_value(Jvm.Instance.Env, obj, fieldPtr, type.Type, jArgs[0]);
+        });
+    }
+    
+    public void SetStaticField<T>(string name, T value, JavaFullType? type = null)
+    {
+        var fieldPtr = GetFieldPtr<T>(name);
+        type ??= JavaObject.MapToType(typeof(T));
+        Jvm.UsingArgs(new object[] { value! }, jArgs =>
+        {
+            MudInterface.set_static_field_value(Jvm.Instance.Env, Cls, fieldPtr, type.Type, jArgs[0]);
+        });
     }
     
 }

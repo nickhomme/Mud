@@ -208,10 +208,18 @@ jfieldID mud_get_field_id(JNIEnv* env, jclass cls, const char* field, const char
 }
 
 jvalue mud_get_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type) {
-  return mud_field_handler(env, cls, field, type, false);
+  return mud_get_field_handler(env, cls, field, type, false);
 }
+void mud_set_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type, jvalue value) {
+  return mud_set_field_handler(env, cls, field, type, value, false);
+}
+
 jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_Type type) {
-  return mud_field_handler(env, cls, field, type, true);
+  return mud_get_field_handler(env, cls, field, type, true);
+}
+
+void mud_set_static_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type, jvalue value) {
+  return mud_set_field_handler(env, cls, field, type, value, true);
 }
 
 bool mud_instance_of(JNIEnv* env, jobject obj, jclass cls) {

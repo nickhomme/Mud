@@ -1,5 +1,7 @@
 Mud/Clib/cmake-build-debug
 signatures/
+Mud.J6/**/*.cs
+Mud.J8/**/*.cs
 *.dylib
 *.so
 *.dll

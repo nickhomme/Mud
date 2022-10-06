@@ -10,4 +10,8 @@
       <ProjectReference Include="..\Mud\Mud.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="java" />
+    </ItemGroup>
+
 </Project>
