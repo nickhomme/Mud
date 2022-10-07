@@ -7,13 +7,26 @@ public class ClassInfo
 {
     internal IntPtr Cls { get; }
     public string ClassPath { get; }
+    public string TypeSignature { get; }
     internal Dictionary<string, Dictionary<string, IntPtr>> Methods { get; } = new();
     internal Dictionary<string, IntPtr> Props { get; } = new();
-
     public ClassInfo(IntPtr cls, string classPath)
     {
         Cls = cls;
         ClassPath = classPath;
+        TypeSignature = classPath switch
+        {
+            "int" => "I",
+            "long" => "J",
+            "boolean" => "Z",
+            "byte" => "B",
+            "short" => "S",
+            "char" => "C",
+            "float" => "F",
+            "double" => "D",
+            "void" or "Void" => "V",
+            _ => $"L{classPath.Replace('.', '/')};"
+        };
     }
 
     internal IntPtr GetMethodPtrBySig(string method, string signature, bool isStatic)
@@ -27,7 +40,7 @@ public class ClassInfo
         
         if (!methodPointers.TryGetValue(signature, out var methodPtr))
         {
-            // Console.WriteLine($"Getting {(isStatic ? "static" : "member")} method {method} with type signature {signature} in class {ClassPath} [{Cls.HexAddress()}] ");
+            Console.WriteLine($"Getting {(isStatic ? "static" : "member")} method {method} with type signature {signature} in class {ClassPath} [{Cls.HexAddress()}] ");
             if (isStatic)
             {
                 methodPtr = MudInterface.get_static_method(Jvm.Instance.Env, Cls, method, signature);

@@ -13,7 +13,8 @@ Jvm.Initialize();
 // var jclass = new FileInfo(args[0]);
 // Console.WriteLine("Hello, World!");
 
-
+ReflectParser.Load("java.lang.AbstractStringBuilder");
+return;
 
 var signatureDir = new DirectoryInfo("/Users/nicholas/tmp/java/sigs/jdk8/sigs/jdk8-exploded/java/lang");
 

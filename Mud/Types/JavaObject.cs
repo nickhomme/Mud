@@ -43,6 +43,11 @@ public class JavaObject : DynamicObject, IDisposable, IJavaObject
         return $"{Info?.ClassPath}::{JavaObjAddress}";
     }
 
+    public bool Equals(JavaObject? obj)
+    {
+        return obj?.Jobj == Jobj;
+    }
+
     internal void SetObj(IntPtr obj)
     {
         Jobj = obj;
@@ -50,7 +55,7 @@ public class JavaObject : DynamicObject, IDisposable, IJavaObject
 
     public bool InstanceOf(string classPath)
     {
-        return MudInterface.instance_of(Env, Jobj, Jvm.GetClass(classPath).Cls);
+        return MudInterface.instance_of(Env, Jobj, Jvm.GetClassInfo(classPath).Cls);
     }
     
     public bool InstanceOf(ClassInfo cls)
@@ -66,7 +71,7 @@ public class JavaObject : DynamicObject, IDisposable, IJavaObject
     public bool InstanceOf(JavaObject obj)
     {
         // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
-        obj.Info ??= Jvm.GetClass(obj.GetType().GetCustomAttributes<ClassPathAttribute>().First().ClassPath);
+        obj.Info ??= Jvm.GetClassInfo(obj.GetType().GetCustomAttributes<ClassPathAttribute>().First().ClassPath);
         return InstanceOf(obj.Info);
     }
 
@@ -74,7 +79,7 @@ public class JavaObject : DynamicObject, IDisposable, IJavaObject
     public void BindBySig(string signature, params object[] args)
     {
         // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
-        Info ??= Jvm.GetClass(GetType().GetCustomAttributes<ClassPathAttribute>().First()!.ClassPath);
+        Info ??= Jvm.GetClassInfo(GetType().GetCustomAttributes<ClassPathAttribute>().First()!.ClassPath);
 #pragma warning disable CS8073
         // ReSharper disable once ConditionIsAlwaysTrueOrFalse
         if (Jobj != null) return;

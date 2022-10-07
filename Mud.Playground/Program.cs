@@ -13,7 +13,7 @@ var integer = jvm.NewObj("java.lang.Integer", 10);
 var intVal = integer.Call<int>("intValue");
 // var intVal2 = jvm.CallStaticReturnType("java.lang.Integer", "valueOf", "java.lang.Integer",  10).Call<int>("intValue");
 Console.WriteLine($"IntVal: [{intVal}]");
-var integer2 = jvm.GetClass("java.lang.Integer").CallStaticMethodNamedReturn("valueOf", "java.lang.Integer", 9);
+var integer2 = jvm.GetClassInfo("java.lang.Integer").CallStaticMethodNamedReturn("valueOf", "java.lang.Integer", 9);
 var intVal2 = integer2.Call<int>("intValue");
 Console.WriteLine($"IntVal2: [{intVal2}]");
 

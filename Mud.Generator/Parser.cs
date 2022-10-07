@@ -99,25 +99,25 @@ public class ReconstructedClass : ReconstructedInfo
     public void Parse(ClassTypeSigLines lines)
     {
         // ReSharper disable NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
-        BoolType ??= Jvm.GetClass("sun.reflect.generics.tree.BooleanSignature");
-        ArrType ??= Jvm.GetClass("sun.reflect.generics.tree.ArrayTypeSignature");
-        ByteType ??= Jvm.GetClass("sun.reflect.generics.tree.ByteSignature");
-        CharType ??= Jvm.GetClass("sun.reflect.generics.tree.CharSignature");
-        ClassType ??= Jvm.GetClass("sun.reflect.generics.tree.ClassSignature");
-        ClassTypeType ??= Jvm.GetClass("sun.reflect.generics.tree.ClassTypeSignature");
-        DoubleType ??= Jvm.GetClass("sun.reflect.generics.tree.DoubleSignature");
-        FloatType ??= Jvm.GetClass("sun.reflect.generics.tree.FloatSignature");
-        FormalTypeParam ??= Jvm.GetClass("sun.reflect.generics.tree.FormalTypeParameter");
-        IntType ??= Jvm.GetClass("sun.reflect.generics.tree.IntSignature");
-        LongType ??= Jvm.GetClass("sun.reflect.generics.tree.LongSignature");
-        ShortType ??= Jvm.GetClass("sun.reflect.generics.tree.ShortSignature");
-        TypeVarType ??= Jvm.GetClass("sun.reflect.generics.tree.TypeVariableSignature");
-        VoidType ??= Jvm.GetClass("sun.reflect.generics.tree.VoidDescriptor");
-        ClassTypeSigType ??= Jvm.GetClass("sun.reflect.generics.tree.SimpleClassTypeSignature");
+        BoolType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.BooleanSignature");
+        ArrType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.ArrayTypeSignature");
+        ByteType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.ByteSignature");
+        CharType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.CharSignature");
+        ClassType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.ClassSignature");
+        ClassTypeType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.ClassTypeSignature");
+        DoubleType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.DoubleSignature");
+        FloatType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.FloatSignature");
+        FormalTypeParam ??= Jvm.GetClassInfo("sun.reflect.generics.tree.FormalTypeParameter");
+        IntType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.IntSignature");
+        LongType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.LongSignature");
+        ShortType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.ShortSignature");
+        TypeVarType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.TypeVariableSignature");
+        VoidType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.VoidDescriptor");
+        ClassTypeSigType ??= Jvm.GetClassInfo("sun.reflect.generics.tree.SimpleClassTypeSignature");
 // ReSharper restore NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
         lines.Constructors.ForEach(m =>
         {
-            using var sigParser = Jvm.GetClass("sun.reflect.generics.parser.SignatureParser")
+            using var sigParser = Jvm.GetClassInfo("sun.reflect.generics.parser.SignatureParser")
                 .CallStaticMethod<SignatureParser>("make");
 
             using var parsedMethod = sigParser.Call<MethodTypeSignature>("parseMethodSig", m.Descriptor);
@@ -145,7 +145,7 @@ public class ReconstructedClass : ReconstructedInfo
 
         lines.Methods.ForEach(m =>
         {
-            using var sigParser = Jvm.GetClass("sun.reflect.generics.parser.SignatureParser")
+            using var sigParser = Jvm.GetClassInfo("sun.reflect.generics.parser.SignatureParser")
                 .CallStaticMethod<SignatureParser>("make");
             using var parsedMethod = sigParser.Call<MethodTypeSignature>("parseMethodSig", m.Descriptor);
             using var returnTypeObj = parsedMethod.getReturnType();
@@ -182,7 +182,7 @@ public class ReconstructedClass : ReconstructedInfo
 
         lines.Fields.ForEach(f =>
         {
-            using var sigParser = Jvm.GetClass("sun.reflect.generics.parser.SignatureParser")
+            using var sigParser = Jvm.GetClassInfo("sun.reflect.generics.parser.SignatureParser")
                 .CallStaticMethod<SignatureParser>("make");
 
             using var parsedType = sigParser.Call("parseTypeSig",

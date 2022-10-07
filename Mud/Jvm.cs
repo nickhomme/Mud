@@ -13,15 +13,33 @@ public static class Jvm
     internal static Dictionary<string, ClassInfo> ClassInfos { get; } = new();
     private static List<IntPtr> ObjPointers { get; } = new();
 
-
     public static void Initialize(params string[] args)
     {
         var options = MudInterface.gen_options(args.Length, args);
         Instance = MudInterface.create_instance(options, args.Length);
         MudInterface.interop_free(options);
+        
+        PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+        {
+            Console.WriteLine("Sigsev");
+            Environment.Exit(1);
+        });
     }
 
-    public static ClassInfo GetClass(string classPath)
+    public static ClassInfo GetClassInfo<T>() where T : JavaObject
+    {
+        var classPath = typeof(T).GetCustomAttributes<ClassPathAttribute>().FirstOrDefault()?.ClassPath;
+        if (string.IsNullOrWhiteSpace(classPath))
+        {
+            throw new ArgumentException(
+                "Missing class path. Make sure the ClassPath attribute is set and has a value");
+        }
+
+        return GetClassInfo(classPath);
+    }
+
+    
+    public static ClassInfo GetClassInfo(string classPath)
     {
         classPath = classPath.Replace(".", "/");
         if (!ClassInfos.TryGetValue(classPath, out var info))
@@ -76,6 +94,10 @@ public static class Jvm
     }
 
 
+    public static string ExtractStr(JavaObject jString, bool releaseStrObj = false)
+    {
+        return ExtractStr(jString.Jobj, releaseStrObj);
+    }
     internal static string ExtractStr(IntPtr jString, bool releaseStrObj = false)
     {
         [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jstring_to_string")]
@@ -110,7 +132,7 @@ public static class Jvm
                 MudInterface.get_method(Instance.Env, ExceptionCls, "getCause", "()Ljava/lang/Throwable;");
 
             GetExceptionStackMethod = MudInterface.get_method(Instance.Env, ExceptionCls, "getStackTrace",
-                "()Ljava/lang/StackTraceElement;");
+                "()[Ljava/lang/StackTraceElement;");
 
             ExceptionToStringMethod =
                 MudInterface.get_method(Instance.Env, ExceptionCls, "toString", "()Ljava/lang/String;");
@@ -157,12 +179,12 @@ public static class Jvm
 
     private static ClassInfo GetObjClass(IntPtr obj)
     {
-        var classInfo = GetClass("java/lang/Class");
+        var classInfo = GetClassInfo("java/lang/Class");
         // var getNameMethod = classInfo.GetMethodPtrBySig("getName", "()Ljava/lang/String;", false);
         var cls = MudInterface.get_class_of_obj(Instance.Env, obj);
         ObjPointers.Add(cls);
         var classPath = classInfo.CallMethod<string>(cls, "getName");
-        return GetClass(classPath);
+        return GetClassInfo(classPath);
     }
 
     internal static object MapJValue(JavaFullType type, Type valType, JavaVal javaVal)
@@ -278,6 +300,13 @@ public static class Jvm
     //     NewObj<T>(typeof(T).GetCustomAttribute<ClassPathAttribute>()?.ClassPath!);
 
 
+    public static void ReleaseObj(IEnumerable<JavaObject> obj)
+    {
+        foreach (var javaObject in obj)
+        {
+            ReleaseObj(javaObject);
+        }
+    }
     public static void ReleaseObj(JavaObject obj)
     {
         ObjPointers.Remove(obj.Jobj);
@@ -301,6 +330,7 @@ public static class Jvm
         ObjPointers.Clear();
         MudInterface.destroy_instance(Instance.Jvm);
     }
+    
 }
 
 

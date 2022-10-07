@@ -20,9 +20,9 @@ static jthrowable mud_jvm_check_exception(JNIEnv* env) {
   if (!(*env)->ExceptionCheck(env)) {
     return null;
   }
-  printf("[Exception]:\n");
-  (*env)->ExceptionDescribe(env);
+//  printf("[Exception]:\n");
   jthrowable ex = (*env)->ExceptionOccurred(env);
+//  (*env)->ExceptionDescribe(env);
   (*env)->ExceptionClear(env);
   return ex;
 }
@@ -128,7 +128,7 @@ static struct JavaCallResp_S map_call_result(JNIEnv* env, Java_Type type, ptr va
 static struct JavaCallResp_S mud_call_handler(JNIEnv* env, ptr objOrCls, jmethodID method, const jvalue* args, Java_Type type, bool isStatic) {
 #define call(name) (isStatic ? (*env)->CallStatic##name##MethodA : (*env)->Call##name##MethodA)(env, objOrCls, method, args)
 #define retCallMap(name, jtype) jtype val = call(name); return map_call_result(env, type, &val);
-//  printf("Calling %s Method: %p with return of %i on %p\n", isStatic ? "static" : "member", method, type, objOrCls);
+  printf("Calling %s Method: %p with return of %i on %p\n", isStatic ? "static" : "member", method, type, objOrCls);
 
   if (type == Java_Bool) {
     retCallMap(Boolean, jboolean)

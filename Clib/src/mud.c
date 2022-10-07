@@ -183,12 +183,14 @@ jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName,
 }
 
 struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jclass cls, jmethodID method, Java_Type type, const jvalue* args) {
-  return mud_call_handler(env, cls, method, args, type, true);
+  struct JavaCallResp_S resp = mud_call_handler(env, cls, method, args, type, true);
+  printf("StatucResp: {.ex: _%i_; .vd: _%i_; .val: {.l: _%p_};}\n", resp.is_exception, resp.is_void, resp.value.l);
+  return resp;
 }
 
 struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, Java_Type type, const jvalue* args) {
   struct JavaCallResp_S resp = mud_call_handler(env, obj, method, args, type, false);
-//  printf("Resp: {.ex: _%i_; .vd: _%i_; .val: {.l: _%p_};}\n", resp.is_exception, resp.is_void, resp.value.l);
+  printf("MethodResp: {.ex: _%i_; .vd: _%i_; .val: {.l: _%p_};}\n", resp.is_exception, resp.is_void, resp.value.l);
   return resp;
 }
 
