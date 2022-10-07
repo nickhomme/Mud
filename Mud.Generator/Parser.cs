@@ -7,6 +7,12 @@ using Mud.Types;
 
 namespace Mud.Generator;
 
+public class ReconstructedTypeParam
+{
+    public string Name { get; set; }
+    public List<ReconstructedClass> Bounds { get; set; } = new();
+}
+
 public class ReconstructedClass : ReconstructedInfo
 {
     public string ClassPath { get; }
@@ -16,11 +22,16 @@ public class ReconstructedClass : ReconstructedInfo
     public bool IsEnum { get; init; }
     public bool IsFinal { get; init; }
     public bool IsAbstract { get; init; }
-    public string? SubClassOf { get; init; }
+    public ReconstructedClass? SuperClass { get; set; }
+    public List<ReconstructedClass>? Interfaces { get; set; }
     public List<ReconstructedMethod> Constructors { get; } = new();
     public List<ReconstructedMethod> Methods { get; } = new();
     public List<ReconstructedField> Fields { get; } = new();
-    public TypeAttributes Attributes { get; init; }
+    public TypeAttributes Attributes { get; set; }
+
+    public List<ReconstructedTypeParam> Params { get; set; } = new();
+
+    public List<ReconstructedClass> Nested { get; } = new();
 
 #pragma warning disable CS8618
     private static ClassInfo BoolType { get; set; }
@@ -39,7 +50,12 @@ public class ReconstructedClass : ReconstructedInfo
     private static ClassInfo VoidType { get; set; }
     private static ClassInfo ClassTypeSigType { get; set; }
 #pragma warning restore CS8618
-    
+
+    public ReconstructedClass(string classPath)
+    {
+        ClassPath = classPath;
+        (Package, Name) = classPath.SplitClassPath();
+    }
     public ReconstructedClass(ClassTypeSigLines lines)
     {
 
@@ -79,15 +95,6 @@ public class ReconstructedClass : ReconstructedInfo
         if (Name == "")
         {
             Environment.Exit(1);
-        }
-
-        Name = Name.Split('<')[0];
-        var subClassParts = Name.Split('$');
-        SubClassOf = subClassParts.Length == 1 ? null : subClassParts[0];
-        Name = subClassParts.ElementAtOrDefault(1) ?? Name;
-        if (Name == "CharSequence")
-        {
-            var i = 0;
         }
 
         IsAbstract = lines.Header.StartsWith("abstract ") || lines.Header.Contains(" abstract ");
@@ -245,14 +252,15 @@ public class ReconstructedMethod : ReconstructedInfo
     public List<JavaFullType> Throws { get; init; } = new();
     public JavaFullType ReturnType { get; init; }
     public List<JavaFullType> ParamTypes { get; init; }
-    public MemberAttributes Attributes { get; init; }
+    public MemberAttributes Attributes { get; set; }
     public string Signature { get; init; }
+    public bool Synchronized { get; set; }
 }
 
 public class ReconstructedField : ReconstructedInfo
 {
     public JavaFullType Type { get; init; }
-    public MemberAttributes Attributes { get; init; }
+    public MemberAttributes Attributes { get; set; }
     public string Signature { get; init; }
 }
 

@@ -127,7 +127,17 @@ public class JavaObject : DynamicObject, IDisposable, IJavaObject
 
     internal static string GenSignature(Type type) => GenSignature(MapToType(type));
 
-    internal static string GenSignature(object val) => GenSignature(val.GetType());
+    internal static string GenSignature(JavaObject obj)
+    {
+        var classPath = obj.GetType().GetCustomAttributes<ClassPathAttribute>().FirstOrDefault()?.ClassPath;
+        return classPath is null or "java.lang.Object" ? obj.Info.TypeSignature : $"L{classPath};";
+    }
+
+    internal static string GenSignature(object val)
+    {
+        if (val is JavaObject javaObject) return GenSignature(javaObject);
+        return GenSignature(val.GetType());  
+    } 
 
     internal static string GenMethodSignature(Type? returnType, params Type[] args)
     {
@@ -199,7 +209,7 @@ public class JavaObject : DynamicObject, IDisposable, IJavaObject
                 CustomType = "java/lang/String"
             };
         }
-        if (type.IsAssignableTo(typeof(JavaObject)))
+        if (type.IsAssignableTo(typeof(JavaObject)) || type.IsAssignableTo(typeof(IJavaObject)))
         {
             return new(JavaType.Object)
             {

@@ -22,10 +22,10 @@ public class Writer
         {
             var i = 0;
         }
-        var isNested = cls.SubClassOf != null;
+        var isNested = cls.SuperClass != null;
         _cls = cls;
         _codeNamespace = new(cls.Package);
-        _codeType = new(isNested ? cls.SubClassOf! : cls.Name)
+        _codeType = new(isNested ? cls.SuperClass!.ClassPath : cls.Name)
         {
             IsClass = !isNested && cls.IsClass,
             IsInterface = !isNested && cls.IsInterface,

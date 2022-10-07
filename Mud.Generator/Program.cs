@@ -1,6 +1,5 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-
 using System.CodeDom;
 using System.CodeDom.Compiler;
 using Microsoft.CodeAnalysis;
@@ -8,12 +7,24 @@ using Microsoft.CSharp;
 using Mud;
 using Mud.Generator;
 using Mud.Types;
+var baseDir = Path.Join(Directory.GetCurrentDirectory(), "Mud.J8");
 
-Jvm.Initialize();
-// var jclass = new FileInfo(args[0]);
-// Console.WriteLine("Hello, World!");
+// Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/Signatures/lib/guava-31.1-jre.jar");
+Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/Mud/out/artifacts/Mud_jar/Mud.jar:/Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home/jre/lib/rt.jar");
 
-ReflectParser.Load("java.lang.AbstractStringBuilder");
+var mudClsInfo = Jvm.GetClassInfo("com.nickhomme.mud.Mud");
+var classes = mudClsInfo.CallStaticMethod<string[]>("GetAllLoadedClassPaths").Where(c => c.StartsWith("java"));
+// Console.WriteLine(string.Join("\n", classes));
+var reconstructedClasses = classes.Select(ReflectParser.Load).ToList();
+// var cls = ReflectParser.Load("java.lang.AbstractStringBuilder");
+// var clsDir = new DirectoryInfo(Path.Join(baseDir, cls.Package.Replace('.', '/')));
+//         
+// if (!clsDir.Exists)
+// {
+//     clsDir.Create();
+// }
+// var filePath = Path.Join(clsDir.FullName, $"{cls.Name}.cs");
+// new Writer(cls).WriteTo(filePath);
 return;
 
 var signatureDir = new DirectoryInfo("/Users/nicholas/tmp/java/sigs/jdk8/sigs/jdk8-exploded/java/lang");
@@ -27,8 +38,7 @@ void AddFiles(DirectoryInfo dir)
         var cls = new ReconstructedClass(fileSigs);
         if (char.IsDigit(cls.Name[0])) continue;
         ;
-        var baseDir = Directory.GetCurrentDirectory();
-        var clsDir = new DirectoryInfo(Path.Join(baseDir, "Mud.J8", cls.Package.Replace('.', '/')));
+        var clsDir = new DirectoryInfo(Path.Join(baseDir, cls.Package.Replace('.', '/')));
         
         if (!clsDir.Exists)
         {

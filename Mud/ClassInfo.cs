@@ -5,7 +5,7 @@ namespace Mud;
 
 public class ClassInfo
 {
-    internal IntPtr Cls { get; }
+    public IntPtr Cls { get; }
     public string ClassPath { get; }
     public string TypeSignature { get; }
     internal Dictionary<string, Dictionary<string, IntPtr>> Methods { get; } = new();
@@ -40,7 +40,7 @@ public class ClassInfo
         
         if (!methodPointers.TryGetValue(signature, out var methodPtr))
         {
-            Console.WriteLine($"Getting {(isStatic ? "static" : "member")} method {method} with type signature {signature} in class {ClassPath} [{Cls.HexAddress()}] ");
+            // Console.WriteLine($"Getting {(isStatic ? "static" : "member")} method {method} with type signature {signature} in class {ClassPath} [{Cls.HexAddress()}] ");
             if (isStatic)
             {
                 methodPtr = MudInterface.get_static_method(Jvm.Instance.Env, Cls, method, signature);
@@ -209,7 +209,6 @@ public class ClassInfo
         return Jvm.UsingArgs<T>(args, jArgs =>
         {
             var methodPtr = GetMethodPtr(true, returnType, method, args);
-            Console.WriteLine($"call {jArgs[0].Int}");
             var resp = MudInterface.call_static_method(Jvm.Instance.Env, Cls, methodPtr, JavaType.Object, jArgs);
             Console.WriteLine($"resp {resp.Value.Object.HexAddress()}");
             return resp;

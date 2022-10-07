@@ -8,8 +8,11 @@ int main(int argc, char **argv) {
   union jvalue valT = {};
   printf("%zu\n%zu\n%zu\n%zu\n", sizeof(respT), sizeof(valT), sizeof(bool), sizeof(char));
 
-  JavaVMOption* options = mud_jvm_options_va(1, "-Djava.class.path=/Users/nicholas/Documents/ct400/java/jt400.jar:/Users/nicholas/Documents/ct400/java");
+//  JavaVMOption* options = mud_jvm_options_va(1, "-Djava.class.path=/Users/nicholas/Documents/ct400/java/jt400.jar:/Users/nicholas/Documents/ct400/java");
+  JavaVMOption* options = mud_jvm_options_va(1, "-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/Signatures/lib/guava-31.1-jre.jar");
   Java_JVM_Instance jvm = mud_jvm_create_instance(options, 1);
+  jclass  cls = mud_get_class(jvm.env, "com/google/common/reflect/ClassPath");
+  printf("cls: %p\n", cls);
 
   jclass intCls = mud_get_class(jvm.env, "java/lang/Integer");
   jmethodID valueOfMid = mud_get_static_method(jvm.env, intCls, "valueOf", "(I)Ljava/lang/Integer;");

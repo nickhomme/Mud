@@ -46,7 +46,7 @@ Java_JVM_Instance mud_jvm_create_instance(JavaVMOption* options, int amnt) {
 
   printf("Creating JVM with args:\n");
   for (int i = 0; i < amnt; ++i) {
-    printf("\t%s\n", options[i].optionString);
+    printf("\t`%s`\n", options[i].optionString);
   }
 
 
@@ -184,13 +184,13 @@ jmethodID mud_get_static_method(JNIEnv* env, jclass cls, const char* methodName,
 
 struct JavaCallResp_S mud_call_static_method(JNIEnv* env, jclass cls, jmethodID method, Java_Type type, const jvalue* args) {
   struct JavaCallResp_S resp = mud_call_handler(env, cls, method, args, type, true);
-  printf("StatucResp: {.ex: _%i_; .vd: _%i_; .val: {.l: _%p_};}\n", resp.is_exception, resp.is_void, resp.value.l);
+//  printf("StatucResp: {.ex: _%i_; .vd: _%i_; .val: {.l: _%p_};}\n", resp.is_exception, resp.is_void, resp.value.l);
   return resp;
 }
 
 struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method, Java_Type type, const jvalue* args) {
   struct JavaCallResp_S resp = mud_call_handler(env, obj, method, args, type, false);
-  printf("MethodResp: {.ex: _%i_; .vd: _%i_; .val: {.l: _%p_};}\n", resp.is_exception, resp.is_void, resp.value.l);
+//  printf("MethodResp: {.ex: _%i_; .vd: _%i_; .val: {.l: _%p_};}\n", resp.is_exception, resp.is_void, resp.value.l);
   return resp;
 }
 
@@ -291,7 +291,7 @@ char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod
     // this is a cause.
     if (isTop)
     {
-      const char* causedByMsg = "\nCaused by: ";
+      const char* causedByMsg = "Caused by: ";
       const size_t causedByMsgLen = strlen(causedByMsg);
       memcpy(msg + (sizeof(char) * len), causedByMsg, causedByMsgLen);
       len += causedByMsgLen;
@@ -304,6 +304,7 @@ char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod
   }
 
   // Append stack trace messages if there are any.
+//  printf("Frames: %i\n", frames_length);
   if (frames_length > 0)
   {
     jsize i;
@@ -317,13 +318,15 @@ char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod
           (jstring) (*env)->CallObjectMethod(env, frame, frameToStringMethod);
 
       const char* msg_str = (*env)->GetStringUTFChars(env, msg_obj, 0);
-
-
+//      printf("msg_str: `%s`\n", msg_str);
       const char* indentMsg = "\n    ";
       const size_t indentMsgLen = 5;
       memcpy(msg + (sizeof(char) * len), indentMsg, indentMsgLen);
       len += indentMsgLen;
-
+      const size_t msgStrLen = strlen(msg_str);
+      memcpy(msg + len, msg_str, msgStrLen);
+      len += msgStrLen;
+//      printf("msg: `%s`_____\n", msg);
       (*env)->ReleaseStringUTFChars(env, msg_obj, msg_str);
       (*env)->DeleteLocalRef(env, msg_obj);
       (*env)->DeleteLocalRef(env, frame);

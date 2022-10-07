@@ -2,8 +2,10 @@ namespace Mud;
 
 public class JavaException : Exception
 {
-    public JavaException(string message) : base(message)
+    public string JavaStackTrace { get; }
+    public JavaException(string message, string stackTrace) : base(message)
     {
+        JavaStackTrace = stackTrace;
     }
     // public override string? StackTrace { get; }
 }

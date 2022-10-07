@@ -19,11 +19,6 @@ public static class Jvm
         Instance = MudInterface.create_instance(options, args.Length);
         MudInterface.interop_free(options);
         
-        PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
-        {
-            Console.WriteLine("Sigsev");
-            Environment.Exit(1);
-        });
     }
 
     public static ClassInfo GetClassInfo<T>() where T : JavaObject
@@ -158,7 +153,8 @@ public static class Jvm
             var exceptionMsg = GetException(resp.Value.Object);
             ObjPointers.Remove(resp.Value.Object);
             MudInterface.release_obj(Instance.Env, resp.Value.Object);
-            throw new JavaException(exceptionMsg);
+            var firstLine = exceptionMsg.IndexOf('\n');
+            throw new JavaException(exceptionMsg[..firstLine], exceptionMsg[(firstLine + 1)..]);
         }
 
         return MapJValue<T>(resp.Value);
@@ -218,6 +214,28 @@ public static class Jvm
                 return arr;
             }
 
+            var origValType = valType;
+            // if it's an interface then we either need to 
+            if (valType.IsInterface)
+            {
+                var types = AppDomain.CurrentDomain.GetAssemblies()
+                    .SelectMany(s => s.GetTypes()).Select(t => (t, t.GetCustomAttributes<ClassPathAttribute>().FirstOrDefault())).Where(t => t.Item2 != null)!.ToList<(Type type, ClassPathAttribute Attr)>();
+                (valType, _) = types.Find(t =>
+                {
+                    return objCls.ClassPath == t.Attr.ClassPath;
+                });
+            }
+
+            // if there is not a class provided with the return class path then we will just return JavaObject if it's possible
+            if (valType == null)
+            {
+                if (!origValType.IsAssignableTo(typeof(JavaObject)))
+                {
+                    throw new NoClassMappingException(origValType, objCls);
+                }
+
+                valType = typeof(JavaObject);
+            }
             var jObjVal = (JavaObject)Activator.CreateInstance(valType)!;
             jObjVal.Info = objCls;
             jObjVal.Env = Instance.Env;
@@ -300,6 +318,7 @@ public static class Jvm
     //     NewObj<T>(typeof(T).GetCustomAttribute<ClassPathAttribute>()?.ClassPath!);
 
 
+    public static void ReleaseObj(IEnumerable<IJavaObject> obj) => ReleaseObj(obj.Select(o => (JavaObject)o));
     public static void ReleaseObj(IEnumerable<JavaObject> obj)
     {
         foreach (var javaObject in obj)
@@ -307,6 +326,8 @@ public static class Jvm
             ReleaseObj(javaObject);
         }
     }
+
+    public static void ReleaseObj(IJavaObject obj) => ReleaseObj((JavaObject)obj);
     public static void ReleaseObj(JavaObject obj)
     {
         ObjPointers.Remove(obj.Jobj);
@@ -445,7 +466,7 @@ internal static class MudInterface
     internal static extern void destroy_instance(IntPtr jvm);
 }
 
-static class IntPtrExtensions
+public static class IntPtrExtensions
 {
     public static string HexAddress(this IntPtr ptr) => $"0x{ptr:X}".ToLower();
 }
