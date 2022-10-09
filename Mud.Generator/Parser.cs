@@ -10,7 +10,14 @@ namespace Mud.Generator;
 public class ReconstructedTypeParam
 {
     public string Name { get; set; }
-    public List<ReconstructedClass> Bounds { get; set; } = new();
+    public List<ReconstructedTypeInfo> Bounds { get; set; } = new();
+}
+
+public class ReconstructedTypeInfo
+{
+    public string? Name { get; set; }
+    public ReconstructedClass? Class { get; init; }
+    public List<ReconstructedTypeInfo> Args { get; init; } = new();
 }
 
 public class ReconstructedClass : ReconstructedInfo
@@ -22,8 +29,10 @@ public class ReconstructedClass : ReconstructedInfo
     public bool IsEnum { get; init; }
     public bool IsFinal { get; init; }
     public bool IsAbstract { get; init; }
-    public ReconstructedClass? SuperClass { get; set; }
-    public List<ReconstructedClass>? Interfaces { get; set; }
+    public ReconstructedTypeInfo? SuperClass { get; set; }
+    public List<ReconstructedTypeInfo> Interfaces { get; set; }
+    public List<ReconstructedClass> Nested { get; } = new();
+    public ReconstructedClass? ParentClass { get; set; }
     public List<ReconstructedMethod> Constructors { get; } = new();
     public List<ReconstructedMethod> Methods { get; } = new();
     public List<ReconstructedField> Fields { get; } = new();
@@ -31,7 +40,6 @@ public class ReconstructedClass : ReconstructedInfo
 
     public List<ReconstructedTypeParam> Params { get; set; } = new();
 
-    public List<ReconstructedClass> Nested { get; } = new();
 
 #pragma warning disable CS8618
     private static ClassInfo BoolType { get; set; }
@@ -55,6 +63,7 @@ public class ReconstructedClass : ReconstructedInfo
     {
         ClassPath = classPath;
         (Package, Name) = classPath.SplitClassPath();
+        Name = Name.Split('$').ElementAtOrDefault(1) ?? Name;
     }
     public ReconstructedClass(ClassTypeSigLines lines)
     {

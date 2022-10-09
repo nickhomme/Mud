@@ -10,6 +10,63 @@ public static class ReflectParser
 {
     private static Dictionary<string, ReconstructedClass> Completed { get; } = new();
 
+    private static ReconstructedTypeInfo LoadType(Type type, int depth)
+    {
+        var name = type.GetTypeName();
+        if (name == "void")
+        {
+            // Environment.Exit(4);
+            // ;
+        }
+        if (type is JavaClass boundClass)
+        {
+            return new() { Class = Load(boundClass, depth) };
+        }
+
+        if (type is ParameterizedTypeImpl impl)
+        {
+            using var implCls = impl.GetRawType();
+
+            var argObjs = impl.GetActualTypeArguments();
+            var args = argObjs.Select(a => LoadType(a, depth)).ToList();
+            var cls = Load(implCls, depth);
+            Jvm.ReleaseObj(argObjs);
+            return new()
+            {
+                Class = cls, 
+                Args = args,
+            };
+        }
+        
+        if (type is WildcardTypeImpl wildcardTypeImpl)
+        {
+            var upperBounds = wildcardTypeImpl.GetUpperBounds();
+            var bound = upperBounds[0];
+            Jvm.ReleaseObj(upperBounds);
+            return LoadType(bound, depth);
+        }
+        
+        if (type is TypeVariable typeVar)
+        {
+            return new()
+            {
+                Name = typeVar.GetName()
+            };
+        }
+
+
+        throw new NotImplementedException();
+
+        // if (b is TypeVariableImpl typeVar)
+        // {
+        //     // using var implCls = typeVar.GetRawType();
+        //     // return Load(implCls, depth);
+        //     return null!;
+        // }
+        //
+        // return Load((JavaClass)b, depth);
+    }
+    
     private static ReconstructedClass Load(JavaClass cls, int depth)
     {
         depth += 1;
@@ -33,14 +90,14 @@ public static class ReflectParser
         var fields = cls.GetDeclaredFields();
         var clsModifiers = cls.Modifiers;
         using var superClsObj = cls.GetSuperclass();
-        var interfaceClsObjs = cls.GetInterfaces();
+        var interfaceClsObjs = cls.GetGenericInterfaces();
 
         if (superClsObj != null)
         {
-            reconstructed.SuperClass = Load(superClsObj, depth);
+            reconstructed.SuperClass = LoadType(superClsObj, depth);
         }
 
-        reconstructed.Interfaces = interfaceClsObjs.Select(c => Load(c, depth)).ToList();
+        reconstructed.Interfaces = interfaceClsObjs.Select(c => LoadType(c, depth)).ToList();
         
         Jvm.ReleaseObj(interfaceClsObjs);
 
@@ -52,28 +109,7 @@ public static class ReflectParser
             return new ReconstructedTypeParam()
             {
                 Name = p.GetName(),
-                Bounds = p.GetBounds().Select(b =>
-                {
-                    if (b is JavaClass boundClass)
-                    {
-                        return Load(boundClass, depth);
-                    }
-
-                    if (b is ParameterizedTypeImpl impl)
-                    {
-                        using var implCls = impl.GetRawType();
-                        return Load(implCls, depth);
-                    }
-                    
-                    if (b is TypeVariableImpl typeVar)
-                    {
-                        // using var implCls = typeVar.GetRawType();
-                        // return Load(implCls, depth);
-                        return null!;
-                    }
-
-                    return Load((JavaClass)b, depth);
-                }).ToList(),
+                Bounds = p.GetBounds().Select(b => LoadType(b, depth)).ToList(),
             };
         }).ToList();
         
@@ -112,7 +148,7 @@ public static class ReflectParser
                 Throws = exceptionTypeObjs.Select(TypeFromClass).ToList(),
                 Attributes = GetAttributes(modifiers)
             };
-            Console.WriteLine($"{depth}{indent}\t[{name}]Method: [{method.Name}] -> {method.Signature}");
+            // Console.WriteLine($"{depth}{indent}\t[{name}]Method: [{method.Name}] -> {method.Signature}");
             if (modifiers.Has(Modifiers.Synchronized))
             {
                 method.Synchronized = true;
@@ -135,11 +171,16 @@ public static class ReflectParser
             };
             
             
-            Console.WriteLine($"{depth}{indent}\t[{name}]Field: [{field.Name}] -> {field.Signature}");
+            // Console.WriteLine($"{depth}{indent}\t[{name}]Field: [{field.Name}] -> {field.Signature}");
         }
 
         var nestedClasses = cls.GetDeclaredClasses();
-        reconstructed.Nested.AddRange(nestedClasses.Select(c => Load(c, depth)));
+        reconstructed.Nested.AddRange(nestedClasses.Select(c =>
+        {
+            var nested = Load(c, depth);
+            nested.ParentClass = reconstructed;
+            return nested;
+        }));
         Jvm.ReleaseObj(nestedClasses);
         Completed[name] = reconstructed;
         return reconstructed;
@@ -148,6 +189,10 @@ public static class ReflectParser
     
     public static ReconstructedClass Load(string path, int depth = 0)
     {
+        if (path == "void")
+        {
+            Environment.Exit(1);
+        }
         using var cls = JavaClass.ForName(path);
         return Load(cls, depth);
     }
@@ -192,9 +237,11 @@ public static class ReflectParser
 
     private static JavaFullType TypeFromClass(JavaClass cls)
     {
+        var name = cls.GetName().Replace('.', '/');
         if (cls.IsPrimitive())
         {
-            var primitive = JavaClass.Primitives.All.First(p => p.Info.ClassPath == cls.Info.ClassPath).GetName();
+            var primitives = JavaClass.Primitives.All.Select(p => p.GetName()).ToArray();
+            var primitive = primitives.First(p => p == name);
             return primitive switch
             {
                 "int" => new JavaFullType(JavaType.Int),
@@ -216,7 +263,7 @@ public static class ReflectParser
                 ArrayType = TypeFromClass(elemType)
             };
         }
-        var name = cls.GetName().Replace('.', '/');
+        
         if (name == "Void")
         {
             return new(JavaType.Void);
@@ -323,7 +370,7 @@ class JavaClass : JavaClass<JavaObject>
         .CallStaticMethod<JavaClass>(name == "Void" ? "forName" : "getPrimitiveClass", name.Replace('/', '.'));
     
     public new static JavaClass ForName(string name) => Jvm.GetClassInfo<JavaClass>()
-        .CallStaticMethod<JavaClass>("forName", name.Replace('/', '.'), true, JavaClassLoader.SystemClassLoader);
+        .CallStaticMethod<JavaClass>("forName", name.Replace('/', '.'), false, JavaClassLoader.SystemClassLoader);
 
     public static JavaClass Get(string? name = null)
     {
@@ -334,6 +381,7 @@ class JavaClass : JavaClass<JavaObject>
     {
         public static JavaClass Int => GetPrimitive("int");
         public static JavaClass Long => GetPrimitive("long");
+        public static JavaClass Char => GetPrimitive("char");
         public static JavaClass Bool => GetPrimitive("boolean");
         public static JavaClass Byte => GetPrimitive("byte");
         public static JavaClass Short => GetPrimitive("short");
@@ -342,7 +390,7 @@ class JavaClass : JavaClass<JavaObject>
         public static JavaClass Void => GetPrimitive("void");
 
         public static IReadOnlyList<JavaClass> All =>
-            new[] { Int, Long, Bool, Byte, Short, Float, Double, Void }.ToList();
+            new[] { Int, Long, Char, Bool, Byte, Short, Float, Double, Void }.ToList();
     }
 }
 [ClassPath("java.lang.Class")]
@@ -371,6 +419,7 @@ class JavaClass<T> : JavaObject, Type where T : JavaObject
     public JavaClass? GetSuperclass() => Call<JavaClass?>("getSuperclass");
     public TypeVariable[] GetTypeParameters() => Call<TypeVariable[]>("getTypeParameters");
     public JavaClass[] GetInterfaces() => Call<JavaClass[]>("getInterfaces");
+    public Type[] GetGenericInterfaces() => Call<Type[]>("getGenericInterfaces");
     public string GetName() => Call<string>("getName");
     public bool IsPrimitive() => Call<bool>("isPrimitive");
     public bool IsInterface() => Call<bool>("isInterface");
@@ -385,9 +434,11 @@ class JavaClass<T> : JavaObject, Type where T : JavaObject
     {
         get
         {
+            var name = GetName().Replace('.', '/');
             if (IsPrimitive())
             {
-                var primitive = JavaClass.Primitives.All.First(p => p.Info.ClassPath == Info.ClassPath).GetName();
+                var primitives = JavaClass.Primitives.All.Select(p => p.GetName()).ToArray();
+                var primitive = primitives.First(p => p == name);
                 return primitive switch
                 {
                     "int" => "I",
@@ -401,7 +452,7 @@ class JavaClass<T> : JavaObject, Type where T : JavaObject
                     "void" or "Void" => "V",
                 };
             }
-            var name = GetName().Replace('.', '/');
+            
             if (name == "Void")
             {
                 return "V";
@@ -423,14 +474,12 @@ interface TypeVariable : Type
 {
     public string GetName() => Call<string>("getName");
     public Type[] GetBounds() => Call<Type[]>("getBounds");
-    public GenericDeclaration GetGenericDeclaration() => Call<GenericDeclaration>("getGenericDeclaration");
-    public string GetTypeName() => Call<string>("getTypeName");
 }
 
 [ClassPath("java.lang.reflect.Type")]
 interface Type : IJavaObject
 {
-    public string GetTypeName();
+    public string GetTypeName() => Call<string>("getTypeName");
 }
 
 [ClassPath("java.lang.reflect.AnnotatedType")]
@@ -450,13 +499,17 @@ class AnnotatedElement : JavaObject
 [ClassPath("sun/reflect/generics/reflectiveObjects/ParameterizedTypeImpl")]
 class ParameterizedTypeImpl : JavaObject, Type
 {
-    public string GetTypeName() => Call<string>("getTypeName");
     public JavaClass GetRawType() => Call<JavaClass>("getRawType");
+    public Type[] GetActualTypeArguments() => Call<Type[]>("getActualTypeArguments");
 }
 
 [ClassPath("sun/reflect/generics/reflectiveObjects/TypeVariableImpl")]
 class TypeVariableImpl : JavaObject, TypeVariable
 {
-    public string GetTypeName() => Call<string>("getTypeName");
-    public JavaClass GetRawType() => Call<JavaClass>("getRawType");
+}
+
+[ClassPath("sun/reflect/generics/reflectiveObjects/WildcardTypeImpl")]
+class WildcardTypeImpl : JavaObject, Type
+{
+    public Type[] GetUpperBounds() => Call<Type[]>("getUpperBounds");
 }

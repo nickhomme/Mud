@@ -13,9 +13,49 @@ var baseDir = Path.Join(Directory.GetCurrentDirectory(), "Mud.J8");
 Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/Mud/out/artifacts/Mud_jar/Mud.jar:/Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home/jre/lib/rt.jar");
 
 var mudClsInfo = Jvm.GetClassInfo("com.nickhomme.mud.Mud");
-var classes = mudClsInfo.CallStaticMethod<string[]>("GetAllLoadedClassPaths").Where(c => c.StartsWith("java"));
+var classes = mudClsInfo.CallStaticMethod<string[]>("GetAllLoadedClassPaths").Where(c =>
+{
+    return c.StartsWith("java") && c == "java.time.chrono.ChronoLocalDateTime";
+    // if (!c.StartsWith("java")) return false;
+    var subClass = c.Split('$').ElementAtOrDefault(1);
+    if (subClass == null) return true;
+    return !char.IsDigit(subClass[0]);
+} );
 // Console.WriteLine(string.Join("\n", classes));
-var reconstructedClasses = classes.Select(ReflectParser.Load).ToList();
+
+var completedClassPaths = new HashSet<string>();
+
+void TryLoadClass(string classPath)
+{
+    if (completedClassPaths.Contains(classPath)) return;
+    var cls = ReflectParser.Load(classPath);
+
+    var clsDir = new DirectoryInfo(Path.Join(baseDir, cls.Package.Replace('.', '/')));
+        
+    if (!clsDir.Exists)
+    {
+        clsDir.Create();
+    }
+
+    completedClassPaths.Add(cls.ClassPath);
+    var filePath = Path.Join(clsDir.FullName, $"{cls.Name}.cs");
+    var writer = new Writer(cls);
+    writer.WriteTo(filePath);
+    foreach (var usedClass in writer.UsedClassPaths)
+    {
+        Console.WriteLine(usedClass);
+        TryLoadClass(usedClass);
+    }
+}
+
+
+
+foreach (var cls in classes)
+{
+    TryLoadClass(cls);
+}
+
+
 // var cls = ReflectParser.Load("java.lang.AbstractStringBuilder");
 // var clsDir = new DirectoryInfo(Path.Join(baseDir, cls.Package.Replace('.', '/')));
 //         
