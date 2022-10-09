@@ -9,233 +9,8 @@ namespace Mud.Generator;
 public static class ReflectParser
 {
     private static Dictionary<string, ReconstructedClass> Completed { get; } = new();
-
-    private static ReconstructedTypeInfo LoadType(Type type, int depth)
-    {
-        var name = type.GetTypeName();
-        if (name == "void")
-        {
-            // Environment.Exit(4);
-            // ;
-        }
-        if (type is JavaClass boundClass)
-        {
-            return new() { Class = Load(boundClass, depth) };
-        }
-
-        if (type is ParameterizedTypeImpl impl)
-        {
-            using var implCls = impl.GetRawType();
-
-            var argObjs = impl.GetActualTypeArguments();
-            var args = argObjs.Select(a => LoadType(a, depth)).ToList();
-            var cls = Load(implCls, depth);
-            Jvm.ReleaseObj(argObjs);
-            return new()
-            {
-                Class = cls, 
-                Args = args,
-            };
-        }
-        
-        if (type is WildcardTypeImpl wildcardTypeImpl)
-        {
-            var upperBounds = wildcardTypeImpl.GetUpperBounds();
-            var bound = upperBounds[0];
-            Jvm.ReleaseObj(upperBounds);
-            return LoadType(bound, depth);
-        }
-        
-        if (type is TypeVariable typeVar)
-        {
-            return new()
-            {
-                Name = typeVar.GetName()
-            };
-        }
-
-
-        throw new NotImplementedException();
-
-        // if (b is TypeVariableImpl typeVar)
-        // {
-        //     // using var implCls = typeVar.GetRawType();
-        //     // return Load(implCls, depth);
-        //     return null!;
-        // }
-        //
-        // return Load((JavaClass)b, depth);
-    }
     
-    private static ReconstructedClass Load(JavaClass cls, int depth)
-    {
-        depth += 1;
-        var name = cls.GetName();
-        if (Completed.TryGetValue(name, out var reconstructed))
-        {
-            return reconstructed;
-        }
-        Completed[name] = reconstructed = new ReconstructedClass(cls.GetName())
-        {
-            IsClass = !cls.IsEnum() && !cls.IsInterface(),
-            IsInterface = cls.IsInterface(),
-            IsEnum = cls.IsEnum(),
-        };
-        var indent = "".PadLeft(depth, '\t');
-        Console.WriteLine($"{depth}" + indent + cls.GetName());
-        
-        
-        
-        var methods = cls.GetDeclaredMethods();
-        var fields = cls.GetDeclaredFields();
-        var clsModifiers = cls.Modifiers;
-        using var superClsObj = cls.GetSuperclass();
-        var interfaceClsObjs = cls.GetGenericInterfaces();
-
-        if (superClsObj != null)
-        {
-            reconstructed.SuperClass = LoadType(superClsObj, depth);
-        }
-
-        reconstructed.Interfaces = interfaceClsObjs.Select(c => LoadType(c, depth)).ToList();
-        
-        Jvm.ReleaseObj(interfaceClsObjs);
-
-        var typeParmObjs = cls.GetTypeParameters();
-
-        reconstructed.Params = typeParmObjs.Select(p =>
-        {
-            
-            return new ReconstructedTypeParam()
-            {
-                Name = p.GetName(),
-                Bounds = p.GetBounds().Select(b => LoadType(b, depth)).ToList(),
-            };
-        }).ToList();
-        
-        
-        Jvm.ReleaseObj(typeParmObjs);
-        
-        
-        if (!clsModifiers.Has(Modifiers.Public))
-        {
-            reconstructed.Attributes |= TypeAttributes.NotPublic;
-        }
-
-        if (clsModifiers.Has(Modifiers.Abstract))
-        {
-            reconstructed.Attributes |= TypeAttributes.Abstract;
-        }
-        if (clsModifiers.Has(Modifiers.Final))
-        {
-            reconstructed.Attributes |= TypeAttributes.Sealed;
-        }
-        
-        
-        foreach (var javaMethod in methods.Where(m => !m.IsSynthetic))
-        {
-            var paramTypeObjs = javaMethod.GetParameterTypes();
-            var exceptionTypeObjs = javaMethod.GetExceptionTypes();
-            using var returnTypeObj = javaMethod.GetReturnType();
-            var modifiers = javaMethod.Modifiers;
-            
-            var method = new ReconstructedMethod
-            {
-                Name = javaMethod.GetName(),
-                Signature = javaMethod.GetSignature(),
-                ParamTypes = paramTypeObjs.Select(TypeFromClass).ToList(),
-                ReturnType = TypeFromClass(returnTypeObj),
-                Throws = exceptionTypeObjs.Select(TypeFromClass).ToList(),
-                Attributes = GetAttributes(modifiers)
-            };
-            // Console.WriteLine($"{depth}{indent}\t[{name}]Method: [{method.Name}] -> {method.Signature}");
-            if (modifiers.Has(Modifiers.Synchronized))
-            {
-                method.Synchronized = true;
-            }
-            reconstructed.Methods.Add(method);
-            Jvm.ReleaseObj(paramTypeObjs);
-            Jvm.ReleaseObj(exceptionTypeObjs);
-        }
-        
-        foreach (var javaField in fields.Where(m => !m.IsSynthetic))
-        {
-            using var type = javaField.GetType();
-            var modifiers = javaField.Modifiers;
-            var field = new ReconstructedField
-            {
-                Name = javaField.GetName(),
-                Signature = javaField.GetSignature(),
-                Type = TypeFromClass(type),
-                Attributes = GetAttributes(modifiers)
-            };
-            
-            
-            // Console.WriteLine($"{depth}{indent}\t[{name}]Field: [{field.Name}] -> {field.Signature}");
-        }
-
-        var nestedClasses = cls.GetDeclaredClasses();
-        reconstructed.Nested.AddRange(nestedClasses.Select(c =>
-        {
-            var nested = Load(c, depth);
-            nested.ParentClass = reconstructed;
-            return nested;
-        }));
-        Jvm.ReleaseObj(nestedClasses);
-        Completed[name] = reconstructed;
-        return reconstructed;
-    }
-    
-    
-    public static ReconstructedClass Load(string path, int depth = 0)
-    {
-        if (path == "void")
-        {
-            Environment.Exit(1);
-        }
-        using var cls = JavaClass.ForName(path);
-        return Load(cls, depth);
-    }
-
-    private static MemberAttributes GetAttributes(int modifiers)
-    {
-        MemberAttributes attributes = 0;
-        if (modifiers.Has(Modifiers.Private))
-        {
-            attributes |= MemberAttributes.Private;
-        }
-        else if (modifiers.Has(Modifiers.Public))
-        {
-            attributes |= MemberAttributes.Public;
-        }
-        else if (modifiers.Has(Modifiers.Protected))
-        {
-            attributes |= MemberAttributes.Family;
-        }
-        else
-        {
-            attributes |= MemberAttributes.Assembly;
-        }
-
-        if (modifiers.Has(Modifiers.Static))
-        {
-            attributes |= MemberAttributes.Static;
-        }
-        if (modifiers.Has(Modifiers.Abstract))
-        {
-            attributes |= MemberAttributes.Abstract;
-        }
-        if (modifiers.Has(Modifiers.Final))
-        {
-            attributes |= MemberAttributes.Final;
-        }
-
-        return attributes;
-    } 
-
-
-
-    private static JavaFullType TypeFromClass(JavaClass cls)
+    public static JavaFullType TypeFromClass(JavaClass cls)
     {
         var name = cls.GetName().Replace('.', '/');
         if (cls.IsPrimitive())
@@ -302,7 +77,7 @@ internal enum Modifiers
 }
 
 [ClassPath("java.lang.reflect.Method")]
-class JavaMethod : JavaObject
+public class JavaMethod : JavaObject
 {
     public string GetName() => Call<string>("getName");
     public int GetParameterCount() => Call<int>("getParameterCount");
@@ -332,8 +107,34 @@ class JavaMethod : JavaObject
     }
 }
 
+[ClassPath("java.lang.reflect.Constructor")]
+public class JavaConstructor : JavaObject
+{
+    public string GetName() => Call<string>("getName");
+    public int GetParameterCount() => Call<int>("getParameterCount");
+    public JavaClass[] GetParameterTypes() => Call<JavaClass[]>("getParameterTypes");
+    public JavaClass[] GetExceptionTypes() => Call<JavaClass[]>("getExceptionTypes");
+    
+    public bool IsSynthetic  => Call<bool>("isSynthetic");
+    public int Modifiers  => Call<int>("getModifiers");
+    
+    public string GetSignature()
+    {
+        var sigObj = GetProp<string?>("signature");
+        if (sigObj != null)
+        {
+            return sigObj;
+        }
+        var paramTypeCls = GetParameterTypes();
+        var paramsType = string.Join("", paramTypeCls.Select(p => p.TypeSignature));
+        Jvm.ReleaseObj(paramTypeCls);
+        return $"({paramsType})V";
+    }
+    
+}
+
 [ClassPath("java.lang.reflect.Field")]
-class JavaField : JavaObject
+public class JavaField : JavaObject
 {
     public string GetName() => Call<string>("getName");
     public new JavaClass GetType() => Call<JavaClass>("getType");
@@ -354,13 +155,13 @@ class JavaField : JavaObject
 }
 
 [ClassPath("java.lang.ClassLoader")]
-class JavaClassLoader : JavaObject
+public class JavaClassLoader : JavaObject
 {
     private static JavaObject? _systemClassLoader;
     public static JavaObject SystemClassLoader => _systemClassLoader ??= Jvm.GetClassInfo("java.lang.ClassLoader").CallStaticMethod<JavaClassLoader>("getSystemClassLoader");
 }
 
-class JavaClass : JavaClass<JavaObject>
+public class JavaClass : JavaClass<JavaObject>
 {
     
     
@@ -394,7 +195,7 @@ class JavaClass : JavaClass<JavaObject>
     }
 }
 [ClassPath("java.lang.Class")]
-class JavaClass<T> : JavaObject, Type where T : JavaObject
+public class JavaClass<T> : JavaObject, Type where T : JavaObject
 {
     
     public static JavaClass<T> ForName(string name) => Jvm.GetClassInfo<JavaClass<T>>()
@@ -415,6 +216,7 @@ class JavaClass<T> : JavaObject, Type where T : JavaObject
     public JavaClass[] GetDeclaredClasses() => Call<JavaClass[]>("getDeclaredClasses");
     public JavaMethod[] GetDeclaredMethods() => Call<JavaMethod[]>("getDeclaredMethods");
     public JavaField[] GetDeclaredFields() => Call<JavaField[]>("getDeclaredFields");
+    public JavaConstructor[] GetDeclaredConstructors() => Call<JavaConstructor[]>("getDeclaredConstructors");
     public JavaClass GetComponentType() => Call<JavaClass>("getComponentType");
     public JavaClass? GetSuperclass() => Call<JavaClass?>("getSuperclass");
     public TypeVariable[] GetTypeParameters() => Call<TypeVariable[]>("getTypeParameters");
@@ -464,26 +266,26 @@ class JavaClass<T> : JavaObject, Type where T : JavaObject
 }
 
 [ClassPath("java.lang.reflect.AnnotatedType")]
-class GenericDeclaration : AnnotatedElement
+public class GenericDeclaration : AnnotatedElement
 {
     public TypeVariable[] GetTypeParameters() => Call<TypeVariable[]>("getTypeParameters");
 }
 
 [ClassPath("java.lang.reflect.TypeVariable")]
-interface TypeVariable : Type
+public interface TypeVariable : Type
 {
     public string GetName() => Call<string>("getName");
     public Type[] GetBounds() => Call<Type[]>("getBounds");
 }
 
 [ClassPath("java.lang.reflect.Type")]
-interface Type : IJavaObject
+public interface Type : IJavaObject
 {
     public string GetTypeName() => Call<string>("getTypeName");
 }
 
 [ClassPath("java.lang.reflect.AnnotatedType")]
-class AnnotatedType : AnnotatedElement
+public class AnnotatedType : AnnotatedElement
 {
     public new Type GetType() => Call<Type>("getType");
 }
@@ -491,25 +293,25 @@ class AnnotatedType : AnnotatedElement
 
 
 [ClassPath("java.lang.reflect.AnnotatedElement")]
-class AnnotatedElement : JavaObject
+public class AnnotatedElement : JavaObject
 {
     
 }
 
 [ClassPath("sun/reflect/generics/reflectiveObjects/ParameterizedTypeImpl")]
-class ParameterizedTypeImpl : JavaObject, Type
+public class ParameterizedTypeImpl : JavaObject, Type
 {
     public JavaClass GetRawType() => Call<JavaClass>("getRawType");
     public Type[] GetActualTypeArguments() => Call<Type[]>("getActualTypeArguments");
 }
 
 [ClassPath("sun/reflect/generics/reflectiveObjects/TypeVariableImpl")]
-class TypeVariableImpl : JavaObject, TypeVariable
+public class TypeVariableImpl : JavaObject, TypeVariable
 {
 }
 
 [ClassPath("sun/reflect/generics/reflectiveObjects/WildcardTypeImpl")]
-class WildcardTypeImpl : JavaObject, Type
+public class WildcardTypeImpl : JavaObject, Type
 {
     public Type[] GetUpperBounds() => Call<Type[]>("getUpperBounds");
 }

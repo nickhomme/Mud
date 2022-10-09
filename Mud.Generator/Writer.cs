@@ -16,8 +16,12 @@ public class Writer
     public HashSet<string> ClassesUsed { get; } = new();
     private Dictionary<string, string> NameMappings { get; } = new();
 
-    public Writer(ReconstructedClass cls)
+    public Writer(TypeInfo cls)
     {
+        if (cls.Package.Contains('['))
+        {
+            Environment.Exit(6);
+        }
         _codeNamespace = new(EscapedIdent(cls.Package));
         Load(null, cls);
     }
@@ -27,12 +31,14 @@ public class Writer
 
     public string[] UsedClassPaths => ClassesUsed.ToArray();
     
-    private void Load(CodeTypeDeclaration? parent, ReconstructedClass target)
+    private void Load(CodeTypeDeclaration? parent, TypeInfo target)
     {
+        target.Load();
         var codeType = new CodeTypeDeclaration(EscapedIdent(target.Name))
         {
-            IsClass = target.IsClass,
+            IsClass = !target.IsInterface && !target.IsEnum,
             IsInterface = target.IsInterface,
+            IsEnum = target.IsEnum
         };
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         parent?.Members.Add(codeType);
@@ -46,15 +52,15 @@ public class Writer
         // new CodeAttributeArgument(new CodePrimitiveExpression($"{_cls.ClassPath}"))));
 
 
-        if (target.SuperClass != null)
+        if (target.Extends != null)
         {
-            codeType.BaseTypes.Add(JavaTypeRefStr(target.SuperClass));
+            codeType.BaseTypes.Add(JavaTypeRefStr(target.Extends));
         } 
-        else if (target.Interfaces.Count == 0)
+        else if (target.Implements.Count == 0)
         {
             codeType.BaseTypes.Add(target.IsInterface ? typeof(IJavaObject) : typeof(JavaObject));
-        } 
-        target.Interfaces.ForEach(iface =>
+        }
+        target.Implements.ForEach(iface =>
         {
             codeType.BaseTypes.Add(JavaTypeRefStr(iface));
         });
@@ -74,13 +80,22 @@ public class Writer
         target.Params.ForEach(p =>
         {
             var param = new CodeTypeParameter(p.Name);
-            p.Bounds.ForEach(b =>
+            p.Constraints.ForEach(c =>
             {
-                param.Constraints.Add(new CodeTypeReference(JavaTypeRefStr(b)));
+                param.Constraints.Add(new CodeTypeReference(JavaTypeRefStr(c)));
             });
-            
             codeType.TypeParameters.Add(param);
         });
+
+        if (!target.Params.Any())
+        {
+            // var nonArgType = new CodeTypeDeclaration(EscapedIdent(target.Name))
+            // {
+                // IsClass = !target.IsInterface && !target.IsEnum,
+                // IsInterface = target.IsInterface,
+                // IsEnum = target.IsEnum
+            // };
+        }
         
         
         
@@ -109,6 +124,54 @@ public class Writer
     }
 
 
+    private CodeTypeReference JavaTypeRef(TypeInfoInstance? type)
+    {
+        if (type == null) return new(typeof(void));
+        if (type.IsArray)
+        {
+            return new(JavaTypeRef(type.Args[0]), 1);
+        }
+        if (type.Info == null) return new CodeTypeReference("java.lang.Object");
+        if (type.Info.Cls.IsPrimitive())
+        {
+            return JavaTypeRef(ReflectParser.TypeFromClass(type.Info.Cls));
+        }
+
+        if (type.Info.Cls.IsArray())
+        {
+            return new(JavaTypeRef(new TypeInfoInstance(type.Info.Cls.GetComponentType())), 1);
+        }
+
+
+        var argsStrings = type.Info.Params.Select((p, i) =>
+        {
+            var arg = type.Args.ElementAtOrDefault(i);
+            return JavaTypeRefStr(arg ?? p.Constraints.ElementAtOrDefault(0));
+        });
+        
+
+        var str = JavaTypeRefStr(type.Info.ClassPath);
+        // if (str == "Class")
+        // {
+        //     Environment.Exit(5);
+        // }
+        // var argsStrings = type.Args.Select((a, i) =>
+        // {
+        //     if (a.Info != null)
+        //     {
+        //         return JavaTypeRefStr(a);
+        //     }
+        //     return JavaTypeRefStr(type.Info.Params[i].Constraints.ElementAtOrDefault(0) ?? a);
+        // });
+        
+        if (type.Info.Params.Count != 0)
+        {
+            str = $"{str}<{string.Join(", ", argsStrings)}";
+        }
+
+        return new(str);
+    }
+    
     private CodeTypeReference JavaTypeRef(JavaFullType type)
     {
         if (type.Type is JavaType.Object)
@@ -123,6 +186,10 @@ public class Writer
             PackageUsages.Add(package);
             
             ClassesUsed.Add(classPath.Split('$')[0]);
+            if (ClassesUsed.Any(u => u.Contains('[')))
+            {
+                Environment.Exit(1);
+            }
             static bool IsDotNetType(string name)
             {
                 return AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes()
@@ -168,16 +235,23 @@ public class Writer
         });
     }
 
+
+    private static Assembly[] Assemblies { get; } =  AppDomain.CurrentDomain.GetAssemblies();
+
     private string JavaTypeRefStr(string classPath)
     {
         classPath = classPath.Replace('/', '.');
         ClassesUsed.Add(classPath.Split('$')[0]);
+        if (ClassesUsed.Any(u => u.Contains('[')))
+        {
+            Environment.Exit(2);
+        }
         var (package, name) = classPath.SplitClassPath();
         PackageUsages.Add(package);
 
         static bool IsDotNetType(string name)
         {
-            return AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes()
+            return Assemblies.SelectMany(a => a.GetTypes()
                 .Where(t => t.Namespace?.Split('.')[0] == "System")).Any(t => t.Name == name);
         }
 
@@ -231,34 +305,57 @@ public class Writer
     }
 
 
-    private string JavaTypeRefStr(ReconstructedTypeInfo type)
+    private string JavaTypeRefStr(TypeInfoInstance? type)
     {
-
-        if (type.Name != null) return type.Name;
-        if (type.Class == null)
+        if (type == null) return "java.lang.Object";
+        if (type.IsArray)
         {
-            return "java.lang.Object";
+            return $"{type.Args[0]}[]";
         }
+        if (type.ForwardedArg != null) return type.ForwardedArg;
+        if (type.Info == null) return "java.lang.Object";
 
-        // this occurs from wildcard generics
-        if (type.Class.ClassPath == "void")
+
+        var fullType = ReflectParser.TypeFromClass(type.Info.Cls);
+        if (fullType.Type != JavaType.Object)
         {
-            return "java.lang.Object";
+            return JavaTypeRefStr(fullType);
         }
         
-        var typeStr = $"{JavaTypeRefStr(type.Class.ClassPath)}";
+        var typeStr = $"{JavaTypeRefStr(type.Info.ClassPath)}";
         if (!type.Args.Any())
         {
             return typeStr;
         }
-        return $"{typeStr}<{string.Join(", ", type.Args.Select(JavaTypeRefStr))}>";
+
+        if (typeStr == "Spliterator.OfPrimitive")
+        {
+            var i = 0;
+        }
+
+        var argsStrings = type.Info.Params.Select((p, i) =>
+        {
+            var arg = type.Args.ElementAtOrDefault(i);
+            return JavaTypeRefStr(arg ?? p.Constraints.ElementAtOrDefault(0));
+        });
+        // var argsStrings = type.Args.Select((a, i) =>
+        // {
+        //     if (a.Info != null)
+        //     {
+        //         return JavaTypeRefStr(a);
+        //     }
+        //     return JavaTypeRefStr(type.Info.Params[i].Constraints.ElementAtOrDefault(0) ?? a);
+        // });
+        
+        return $"{typeStr}<{string.Join(", ", argsStrings)}>";
     }
 
-    private CodeMemberProperty[] LoadFields(ReconstructedClass cls)
+    private CodeMemberProperty[] LoadFields(TypeInfo cls)
     {
 
         return cls.Fields.Select(field =>
         {
+            Console.WriteLine($"[{field.Name}] -> {field.Signature}");
             var type = JavaTypeRef(field.Type);
             var codeProp = new CodeMemberProperty();
             codeProp.Name = EscapedIdent(field.Name);
@@ -300,10 +397,11 @@ public class Writer
         }).ToArray();
     }
 
-    private CodeConstructor[]  LoadConstructors(ReconstructedClass cls)
+    private CodeConstructor[]  LoadConstructors(TypeInfo cls)
     {
         return cls.Constructors.Select(method =>
         {
+            Console.WriteLine($"CTOR");
             var codeMethod = new CodeConstructor()
             {
                 Attributes = method.Attributes
@@ -311,14 +409,14 @@ public class Writer
 
             if (method.Throws.Any())
             {
-                var fmtThrow = (JavaFullType type) =>
-                    $"<exception cref=\"{type.CustomType!.Replace('/', '.')}\"></exception>";
+                var fmtThrow = (TypeInfoInstance type) =>
+                    $"<exception cref=\"{type.Info!.ClassPath.Replace('/', '.')}\"></exception>";
                 method.Throws.ForEach(t => codeMethod.Comments.Add(new(fmtThrow(t), true)));
             }
 
             var paramIndex = 0;
             var paramNames = new List<string>();
-            foreach (var param in method.ParamTypes)
+            foreach (var param in method.Params)
             {
                 var name = EscapedIdent($"param_{paramIndex++}");
                 codeMethod.Parameters.Add(new(JavaTypeRef(param), name));
@@ -336,11 +434,11 @@ public class Writer
         }).ToArray();
     }
 
-    private CodeMemberMethod[] LoadMethods(ReconstructedClass cls)
+    private CodeMemberMethod[] LoadMethods(TypeInfo cls)
     {
         return cls.Methods.Select(method =>
         {
-            // Console.WriteLine($"[{method.Name}] -> {method.Signature}");
+            Console.WriteLine($"[{method.Name}] -> {method.Signature}");
             var codeMethod = new CodeMemberMethod()
             {
                 Name = EscapedIdent(method.Name),
@@ -349,8 +447,8 @@ public class Writer
 
             if (method.Throws.Any())
             {
-                var fmtThrow = (JavaFullType type) =>
-                    $"<exception cref=\"{type.CustomType!.Replace('/', '.')}\"></exception>";
+                var fmtThrow = (TypeInfoInstance type) =>
+                    $"<exception cref=\"{type.Info!.ClassPath.Replace('/', '.')}\"></exception>";
                 method.Throws.ForEach(t => codeMethod.Comments.Add(new(fmtThrow(t), true)));
             }
 
@@ -358,7 +456,7 @@ public class Writer
 
             var paramIndex = 0;
             var paramNames = new List<string>();
-            foreach (var param in method.ParamTypes)
+            foreach (var param in method.Params)
             {
                 var name = $"param_{paramIndex++}";
                 codeMethod.Parameters.Add(new(JavaTypeRef(param), name));
@@ -367,11 +465,13 @@ public class Writer
             // return CallBySig<int>(method.Name, method.GetCustomAttribute<TypeSignatureAttribute>().Signature);
 
             CodeStatement forwarder;
+            var returnType = ReflectParser.TypeFromClass(method.ReturnType!.Info!.Cls);
             if (method.Attributes.HasFlag(MemberAttributes.Static))
             {
                 var args = string.Join(", ", new[] { $"\"{method.Name}\"" }.Concat(paramNames));
-
-                if (method.ReturnType.Type == JavaType.Void)
+                
+                
+                if (returnType.Type == JavaType.Void)
                 {
                     forwarder = new CodeExpressionStatement(
                         new CodeSnippetExpression($"Jvm.GetClassInfo(\"{cls.ClassPath}\").CallStaticMethod({args})"));
@@ -388,7 +488,7 @@ public class Writer
             else
             {
                 CodeMethodReferenceExpression callBySig;
-                if (method.ReturnType.Type == JavaType.Void)
+                if (returnType.Type == JavaType.Void)
                 {
                     callBySig = new CodeMethodReferenceExpression(new CodeThisReferenceExpression(), "CallBySig");
                 }
@@ -403,7 +503,7 @@ public class Writer
                             { new CodePrimitiveExpression(method.Name), new CodePrimitiveExpression(method.Signature) }
                         .Concat(paramNames.Select(p => new CodeVariableReferenceExpression(p)))
                         .ToArray<CodeExpression>());
-                if (method.ReturnType.Type == JavaType.Void)
+                if (returnType.Type == JavaType.Void)
                 {
                     forwarder = new CodeExpressionStatement(forwarderInvoke);
                 }

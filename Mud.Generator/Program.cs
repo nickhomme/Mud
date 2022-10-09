@@ -7,6 +7,8 @@ using Microsoft.CSharp;
 using Mud;
 using Mud.Generator;
 using Mud.Types;
+using TypeInfo = Mud.Generator.TypeInfo;
+
 var baseDir = Path.Join(Directory.GetCurrentDirectory(), "Mud.J8");
 
 // Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/Signatures/lib/guava-31.1-jre.jar");
@@ -15,7 +17,7 @@ Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/M
 var mudClsInfo = Jvm.GetClassInfo("com.nickhomme.mud.Mud");
 var classes = mudClsInfo.CallStaticMethod<string[]>("GetAllLoadedClassPaths").Where(c =>
 {
-    return c.StartsWith("java") && c == "java.time.chrono.ChronoLocalDateTime";
+    return c.StartsWith("java") && c == "java.time.temporal.Temporal";
     // if (!c.StartsWith("java")) return false;
     var subClass = c.Split('$').ElementAtOrDefault(1);
     if (subClass == null) return true;
@@ -28,7 +30,7 @@ var completedClassPaths = new HashSet<string>();
 void TryLoadClass(string classPath)
 {
     if (completedClassPaths.Contains(classPath)) return;
-    var cls = ReflectParser.Load(classPath);
+    var cls = TypeInfo.GetLoaded(classPath);
 
     var clsDir = new DirectoryInfo(Path.Join(baseDir, cls.Package.Replace('.', '/')));
         
@@ -43,7 +45,7 @@ void TryLoadClass(string classPath)
     writer.WriteTo(filePath);
     foreach (var usedClass in writer.UsedClassPaths)
     {
-        Console.WriteLine(usedClass);
+        Console.WriteLine("Pasing used: " + usedClass);
         TryLoadClass(usedClass);
     }
 }
@@ -66,44 +68,6 @@ foreach (var cls in classes)
 // var filePath = Path.Join(clsDir.FullName, $"{cls.Name}.cs");
 // new Writer(cls).WriteTo(filePath);
 return;
-
-var signatureDir = new DirectoryInfo("/Users/nicholas/tmp/java/sigs/jdk8/sigs/jdk8-exploded/java/lang");
-
-void AddFiles(DirectoryInfo dir)
-{
-    Console.WriteLine($"Checking dir {dir.FullName}");
-    foreach (var fileInfo in dir.GetFiles("*.txt"))
-    {
-        var fileSigs = new ClassTypeSigLines(fileInfo);
-        var cls = new ReconstructedClass(fileSigs);
-        if (char.IsDigit(cls.Name[0])) continue;
-        ;
-        var clsDir = new DirectoryInfo(Path.Join(baseDir, cls.Package.Replace('.', '/')));
-        
-        if (!clsDir.Exists)
-        {
-            clsDir.Create();
-        }
-        var filePath = Path.Join(clsDir.FullName, $"{cls.Name}.cs");
-        // if (File.Exists(filePath))
-        // {
-        //     continue;
-        // }
-        cls.Parse(fileSigs);
-
-        new Writer(cls).WriteTo(filePath);
-        // Console.WriteLine($"Saved to: {filePath}\n\t{fileInfo.FullName}");
-    }
-
-    foreach (var subDir in dir.GetDirectories())
-    {
-        AddFiles(subDir);
-    }
-}
-
-AddFiles(signatureDir);
-
-
 
 
 
