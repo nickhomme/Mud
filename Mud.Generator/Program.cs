@@ -17,7 +17,7 @@ Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/M
 var mudClsInfo = Jvm.GetClassInfo("com.nickhomme.mud.Mud");
 var classes = mudClsInfo.CallStaticMethod<string[]>("GetAllLoadedClassPaths").Where(c =>
 {
-    return c.StartsWith("java") && c == "java.time.temporal.Temporal";
+    return c.StartsWith("java") && c == "java.util.Hashtable";
     // if (!c.StartsWith("java")) return false;
     var subClass = c.Split('$').ElementAtOrDefault(1);
     if (subClass == null) return true;
@@ -30,7 +30,7 @@ var completedClassPaths = new HashSet<string>();
 void TryLoadClass(string classPath)
 {
     if (completedClassPaths.Contains(classPath)) return;
-    var cls = TypeInfo.GetLoaded(classPath);
+    var cls = TypeInfo.Get(classPath);
 
     var clsDir = new DirectoryInfo(Path.Join(baseDir, cls.Package.Replace('.', '/')));
         
@@ -41,12 +41,19 @@ void TryLoadClass(string classPath)
 
     completedClassPaths.Add(cls.ClassPath);
     var filePath = Path.Join(clsDir.FullName, $"{cls.Name}.cs");
+    
+    // if (File.Exists(filePath))
+    // {
+    //     return;
+    // }
+    
+    cls.Load();
     var writer = new Writer(cls);
     writer.WriteTo(filePath);
     foreach (var usedClass in writer.UsedClassPaths)
     {
         Console.WriteLine("Pasing used: " + usedClass);
-        TryLoadClass(usedClass);
+        // TryLoadClass(usedClass);
     }
 }
 

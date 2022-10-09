@@ -51,8 +51,11 @@ public class Writer
         // _codeType.CustomAttributes.Add(new("TypeSignature",
         // new CodeAttributeArgument(new CodePrimitiveExpression($"{_cls.ClassPath}"))));
 
-
-        if (target.Extends != null)
+        if (target.IsEnum)
+        {
+            codeType.BaseTypes.Add(typeof(long));
+        } 
+        else if (target.Extends != null)
         {
             codeType.BaseTypes.Add(JavaTypeRefStr(target.Extends));
         } 
@@ -166,7 +169,7 @@ public class Writer
         
         if (type.Info.Params.Count != 0)
         {
-            str = $"{str}<{string.Join(", ", argsStrings)}";
+            str = $"{str}<{string.Join(", ", argsStrings)}>";
         }
 
         return new(str);
@@ -190,10 +193,10 @@ public class Writer
             {
                 Environment.Exit(1);
             }
+
             static bool IsDotNetType(string name)
             {
-                return AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes()
-                    .Where(t => t.Namespace?.Split('.')[0] == "System")).Any(t => t.Name == name);
+                return SystemTypes.Contains(name);
             }
 
             // if this is a dotnet type then we have to use full path
@@ -236,7 +239,8 @@ public class Writer
     }
 
 
-    private static Assembly[] Assemblies { get; } =  AppDomain.CurrentDomain.GetAssemblies();
+    private static string[] SystemTypes { get; } =  AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes()
+        .Where(t => t.Namespace?.Split('.')[0] == "System")).Select(t => t.Name.Split('`')[0]).ToArray();
 
     private string JavaTypeRefStr(string classPath)
     {
@@ -251,10 +255,10 @@ public class Writer
 
         static bool IsDotNetType(string name)
         {
-            return Assemblies.SelectMany(a => a.GetTypes()
-                .Where(t => t.Namespace?.Split('.')[0] == "System")).Any(t => t.Name == name);
+            return SystemTypes.Contains(name);
         }
 
+        
         // if this is a dotnet type then we have to use full path
         if (IsDotNetType(name))
         {
@@ -350,9 +354,16 @@ public class Writer
         return $"{typeStr}<{string.Join(", ", argsStrings)}>";
     }
 
-    private CodeMemberProperty[] LoadFields(TypeInfo cls)
+    private CodeTypeMember[] LoadFields(TypeInfo cls)
     {
 
+        if (cls.IsEnum)
+        {
+            // ReSharper disable once CoVariantArrayConversion
+            return cls.Fields.Select(f => new CodeMemberField(cls.Name, f.Name)).ToArray();
+        }        
+
+        // ReSharper disable once CoVariantArrayConversion
         return cls.Fields.Select(field =>
         {
             Console.WriteLine($"[{field.Name}] -> {field.Signature}");
@@ -399,6 +410,8 @@ public class Writer
 
     private CodeConstructor[]  LoadConstructors(TypeInfo cls)
     {
+        return Array.Empty<CodeConstructor>();
+        
         return cls.Constructors.Select(method =>
         {
             Console.WriteLine($"CTOR");
@@ -420,6 +433,7 @@ public class Writer
             {
                 var name = EscapedIdent($"param_{paramIndex++}");
                 codeMethod.Parameters.Add(new(JavaTypeRef(param), name));
+                // codeMethod.BaseConstructorArgs.Add(new CodeVariableReferenceExpression(name));
                 paramNames.Add(name);
             }
 

@@ -222,6 +222,7 @@ public class JavaClass<T> : JavaObject, Type where T : JavaObject
     public TypeVariable[] GetTypeParameters() => Call<TypeVariable[]>("getTypeParameters");
     public JavaClass[] GetInterfaces() => Call<JavaClass[]>("getInterfaces");
     public Type[] GetGenericInterfaces() => Call<Type[]>("getGenericInterfaces");
+    public Type[] getEnumConstants() => Call<Type[]>("getGenericInterfaces");
     public string GetName() => Call<string>("getName");
     public bool IsPrimitive() => Call<bool>("isPrimitive");
     public bool IsInterface() => Call<bool>("isInterface");

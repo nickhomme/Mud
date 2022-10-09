@@ -11,7 +11,6 @@ public class TypeInfoInstance
     public string? ForwardedArg { get; }
     public bool IsArray { get; set; }
 
-    
     public TypeInfoInstance(Type type)
     {
         var name = type.GetTypeName();
@@ -69,6 +68,7 @@ public class TypeInfo
     public List<Method> Constructors { get; } = new();
     public List<Method> Methods { get; } = new();
     public List<Field> Fields { get; } = new();
+    public List<(string Name, int Value)> Enums { get; } = new();
 
     private TypeInfo(JavaClass cls, string classPath)
     {
@@ -130,6 +130,9 @@ public class TypeInfo
         if (IsLoaded) return;
         IsLoaded = true;
         Console.WriteLine($"Loading: {ClassPath}");
+        
+        
+        
         // if (ClassPath == "java.lang.Class")
         // {
             // Environment.Exit(6);

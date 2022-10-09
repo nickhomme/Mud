@@ -301,7 +301,7 @@ public static class Jvm
         ObjPointers.Add(val.Jobj);
         return val;
     }
-
+    
     // private static T NewObj<T>(params object[] args) where T : JavaObject
     // {
     //     return (T)NewObj(typeof(T), null, args);

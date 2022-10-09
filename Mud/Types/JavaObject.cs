@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 namespace Mud.Types;
 
 
-[AttributeUsage(AttributeTargets.Class|AttributeTargets.Interface, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Class|AttributeTargets.Interface|AttributeTargets.Enum, AllowMultiple = true)]
 public class ClassPathAttribute : Attribute
 {
     public readonly string ClassPath;
