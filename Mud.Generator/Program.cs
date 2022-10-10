@@ -2,6 +2,7 @@
 
 using System.CodeDom;
 using System.CodeDom.Compiler;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CSharp;
 using Mud;
@@ -15,10 +16,43 @@ var baseDir = Path.Join(Directory.GetCurrentDirectory(), "Mud.J8");
 Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/Mud/out/artifacts/Mud_jar/Mud.jar:/Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home/jre/lib/rt.jar");
 
 var mudClsInfo = Jvm.GetClassInfo("com.nickhomme.mud.Mud");
+
+var packages = new List<string>()
+{
+    // @"^java\.util\.Collection*"
+    // @"^java\.util\.Collection*"
+    // @"^java\.util\.*"
+    @"^java\.*"
+};
+var testingClasses = new List<string>()
+{
+    "java.awt.dnd.DropTargetAdapter",
+    // "java.lang.Comparable",
+    // "java.lang.Object",
+    // "java.lang.String",
+    // "java.lang.Class",
+    // "java.lang.Iterable",
+    // "java.lang.reflect.Modifier",
+    // "java.util.Dictionary",
+    // "java.util.Map",
+    // "java.util.Set",
+    // "java.util.Hashtable",
+    // "java.util.Collection",
+    // "java.awt.color.ICC_ProfileGray",
+    // "java.awt.color.ICC_Profile"
+};
+
+
 var classes = mudClsInfo.CallStaticMethod<string[]>("GetAllLoadedClassPaths").Where(c =>
 {
-    return c.StartsWith("java") && c == "java.util.Hashtable";
-    // if (!c.StartsWith("java")) return false;
+
+    if (packages.Count > 0 && !packages.Any(p => Regex.Match(c, p).Success))
+    {
+        return false;
+    }
+    
+    if (testingClasses.Count != 0) return testingClasses.Contains(c);
+    if (!c.StartsWith("java")) return false;
     var subClass = c.Split('$').ElementAtOrDefault(1);
     if (subClass == null) return true;
     return !char.IsDigit(subClass[0]);
@@ -29,8 +63,14 @@ var completedClassPaths = new HashSet<string>();
 
 void TryLoadClass(string classPath)
 {
+    if (Writer.Written.Contains(classPath)) return;
+    
     if (completedClassPaths.Contains(classPath)) return;
     var cls = TypeInfo.Get(classPath);
+    if (cls.IsPrivate)
+    {
+        return;
+    }
 
     var clsDir = new DirectoryInfo(Path.Join(baseDir, cls.Package.Replace('.', '/')));
         
@@ -42,18 +82,18 @@ void TryLoadClass(string classPath)
     completedClassPaths.Add(cls.ClassPath);
     var filePath = Path.Join(clsDir.FullName, $"{cls.Name}.cs");
     
-    // if (File.Exists(filePath))
-    // {
-    //     return;
-    // }
+    if (File.Exists(filePath))
+    {
+        // return;
+    }
     
     cls.Load();
     var writer = new Writer(cls);
     writer.WriteTo(filePath);
     foreach (var usedClass in writer.UsedClassPaths)
     {
-        Console.WriteLine("Pasing used: " + usedClass);
-        // TryLoadClass(usedClass);
+        // Console.WriteLine("Pasing used: " + usedClass);
+        TryLoadClass(usedClass);
     }
 }
 

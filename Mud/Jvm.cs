@@ -275,7 +275,7 @@ public static class Jvm
         return (T)MapJValue(typeof(T), javaVal);
     }
 
-    private static JavaObject NewObj(Type type, string? classPath, params object[] args)
+    private static IJavaObject NewObj(Type type, string? classPath, params object[] args)
     {
         classPath ??= type.GetCustomAttributes<ClassPathAttribute>().FirstOrDefault()?.ClassPath;
         if (string.IsNullOrWhiteSpace(classPath))
@@ -302,20 +302,20 @@ public static class Jvm
         return val;
     }
     
-    // private static T NewObj<T>(params object[] args) where T : JavaObject
-    // {
-    //     return (T)NewObj(typeof(T), null, args);
-    // }
-    //
-    // public static JavaObject NewObj(string classPath, params object[] args) => NewObj<JavaObject>(classPath, args);
-    //
-    // public static T NewObj<T>(string classPath, params object[] args) where T : JavaObject
-    // {
-    //     return (T)NewObj(typeof(T), classPath, args);
-    // }
+    public static T NewObj<T>(params object[] args) where T : JavaObject
+    {
+        return (T)NewObj(typeof(T), null, args);
+    }
+    
+    public static JavaObject NewObj(string classPath, params object[] args) => NewObj<JavaObject>(classPath, args);
+    
+    public static T NewObj<T>(string classPath, params object[] args) where T : IJavaObject
+    {
+        return (T)NewObj(typeof(T), classPath, args);
+    }
 
-    // public static T NewObj<T>() where T : JavaObject =>
-    //     NewObj<T>(typeof(T).GetCustomAttribute<ClassPathAttribute>()?.ClassPath!);
+    public static T NewObj<T>() where T : IJavaObject =>
+        NewObj<T>(typeof(T).GetCustomAttribute<ClassPathAttribute>()?.ClassPath!);
 
 
     public static void ReleaseObj(IEnumerable<IJavaObject> obj) => ReleaseObj(obj.Select(o => (JavaObject)o));

@@ -2,6 +2,7 @@ using System.CodeDom;
 using System.CodeDom.Compiler;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
 using Microsoft.CSharp;
 using Mud.Types;
 
@@ -15,9 +16,11 @@ public class Writer
     public HashSet<string> PackageUsages { get; } = new();
     public HashSet<string> ClassesUsed { get; } = new();
     private Dictionary<string, string> NameMappings { get; } = new();
+    public static HashSet<string> Written { get; } = new();
 
     public Writer(TypeInfo cls)
     {
+        Written.Add(cls.ClassPath);
         if (cls.Package.Contains('['))
         {
             Environment.Exit(6);
@@ -33,6 +36,7 @@ public class Writer
     
     private void Load(CodeTypeDeclaration? parent, TypeInfo target)
     {
+
         target.Load();
         var codeType = new CodeTypeDeclaration(EscapedIdent(target.Name))
         {
@@ -42,7 +46,10 @@ public class Writer
         };
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         parent?.Members.Add(codeType);
-        _codeNamespace.Types.Add(codeType);
+        if (parent == null)
+        {
+            _codeNamespace.Types.Add(codeType);
+        }
         
         codeType.TypeAttributes |= TypeAttributes.Abstract;
 
@@ -61,12 +68,18 @@ public class Writer
         } 
         else if (target.Implements.Count == 0)
         {
-            codeType.BaseTypes.Add(target.IsInterface ? typeof(IJavaObject) : typeof(JavaObject));
+            // codeType.BaseTypes.Add(target.IsInterface ? typeof(IJavaObject) : typeof(JavaObject));
         }
         target.Implements.ForEach(iface =>
         {
             codeType.BaseTypes.Add(JavaTypeRefStr(iface));
         });
+
+
+        if (target.ClassPath == "java.lang.Object")
+        {
+            codeType.BaseTypes.Add(typeof(JavaObject));
+        }
 
         // ReSharper disable CoVariantArrayConversion
         codeType.Members.AddRange(LoadFields(target));
@@ -85,20 +98,29 @@ public class Writer
             var param = new CodeTypeParameter(p.Name);
             p.Constraints.ForEach(c =>
             {
-                param.Constraints.Add(new CodeTypeReference(JavaTypeRefStr(c)));
+                var typeStr = JavaTypeRefStr(c);
+                if (typeStr == "java.lang.Object")
+                {
+                    return;
+                }
+                param.Constraints.Add(new CodeTypeReference(typeStr));
             });
             codeType.TypeParameters.Add(param);
         });
 
-        if (!target.Params.Any())
-        {
-            // var nonArgType = new CodeTypeDeclaration(EscapedIdent(target.Name))
-            // {
-                // IsClass = !target.IsInterface && !target.IsEnum,
-                // IsInterface = target.IsInterface,
-                // IsEnum = target.IsEnum
-            // };
-        }
+        // if (target.Params.Any())
+        // {
+        //     var nonArgType = new CodeTypeDeclaration(EscapedIdent(target.Name))
+        //     {
+        //         IsClass = codeType.IsClass,
+        //         IsInterface = codeType.IsInterface,
+        //         IsEnum = codeType.IsEnum,
+        //         Attributes = codeType.Attributes,
+        //         TypeAttributes = codeType.TypeAttributes
+        //     };
+        //     _codeNamespace.Types.Add(nonArgType);
+        //     nonArgType.BaseTypes.Add(JavaTypeRef(new TypeInfoInstance(target.Cls)));
+        // }
         
         
         
@@ -134,6 +156,7 @@ public class Writer
         {
             return new(JavaTypeRef(type.Args[0]), 1);
         }
+        if (type.ForwardedArg != null) return new(type.ForwardedArg);
         if (type.Info == null) return new CodeTypeReference("java.lang.Object");
         if (type.Info.Cls.IsPrimitive())
         {
@@ -149,10 +172,27 @@ public class Writer
         var argsStrings = type.Info.Params.Select((p, i) =>
         {
             var arg = type.Args.ElementAtOrDefault(i);
-            return JavaTypeRefStr(arg ?? p.Constraints.ElementAtOrDefault(0));
+            var param = p.Constraints.ElementAtOrDefault(0);
+            string paramStr;
+            if (arg?.IsWildcard ?? false)
+            {
+                paramStr = JavaTypeRefStr(p.Constraints.ElementAtOrDefault(0));    
+            }
+            else
+            {
+                paramStr = JavaTypeRefStr(arg ?? p.Constraints.ElementAtOrDefault(0));
+            }
+            
+            if (paramStr == "java.lang.Object")
+            {
+                paramStr = "object";
+                // paramStr = "Mud.Types.IJavaObject";
+            }
+
+            return paramStr;
         });
         
-
+        if (type.Info.ClassPath == "java.lang.String") return new(typeof(string));
         var str = JavaTypeRefStr(type.Info.ClassPath);
         // if (str == "Class")
         // {
@@ -185,6 +225,7 @@ public class Writer
             }
 
             var classPath = type.CustomType!.Replace('/', '.');
+            if (classPath == "java.lang.String") return new(typeof(string));
             var (package, name) = classPath.SplitClassPath();
             PackageUsages.Add(package);
             
@@ -245,6 +286,7 @@ public class Writer
     private string JavaTypeRefStr(string classPath)
     {
         classPath = classPath.Replace('/', '.');
+        if (classPath == "java.lang.String") return "string";
         ClassesUsed.Add(classPath.Split('$')[0]);
         if (ClassesUsed.Any(u => u.Contains('[')))
         {
@@ -281,6 +323,7 @@ public class Writer
 
         return EscapedPath(name.Replace('$', '.'));
     }
+    
     private string JavaTypeRefStr(JavaFullType type)
     {
         if (type.Type is JavaType.Object)
@@ -314,7 +357,7 @@ public class Writer
         if (type == null) return "java.lang.Object";
         if (type.IsArray)
         {
-            return $"{type.Args[0]}[]";
+            return $"{JavaTypeRefStr(type.Args[0])}[]";
         }
         if (type.ForwardedArg != null) return type.ForwardedArg;
         if (type.Info == null) return "java.lang.Object";
@@ -327,7 +370,10 @@ public class Writer
         }
         
         var typeStr = $"{JavaTypeRefStr(type.Info.ClassPath)}";
-        if (!type.Args.Any())
+
+        if (typeStr == "java.lang.String") return "string";
+        
+        if (!type.Info.Params.Any())
         {
             return typeStr;
         }
@@ -340,7 +386,14 @@ public class Writer
         var argsStrings = type.Info.Params.Select((p, i) =>
         {
             var arg = type.Args.ElementAtOrDefault(i);
-            return JavaTypeRefStr(arg ?? p.Constraints.ElementAtOrDefault(0));
+            var param = JavaTypeRefStr(arg ?? p.Constraints.ElementAtOrDefault(0));
+            if (param == "java.lang.Object")
+            {
+                param = "object";
+                // param = "Mud.Types.IJavaObject";
+            }
+
+            return param;
         });
         // var argsStrings = type.Args.Select((a, i) =>
         // {
@@ -362,11 +415,28 @@ public class Writer
             // ReSharper disable once CoVariantArrayConversion
             return cls.Fields.Select(f => new CodeMemberField(cls.Name, f.Name)).ToArray();
         }        
+        
+        
+        // abstract classes don't have to fully implement interface but they do in c# so we need retrieve the missing ones and apply them here
+        var fields = cls.Fields.ToList();
+        if (cls.Attributes.HasFlag(TypeAttributes.Abstract))
+        {
+            var implmentsMethods = cls.Implements.SelectMany(iface =>
+            {
+                iface.Info.Load();
+                return iface.Info.Fields;
+            }).Distinct(new FieldEqualityComparer()).Where(m => !cls.Fields.Any(m2 => m.Name == m2.Name && m.Signature == m2.Signature));
+            
+            fields.AddRange(implmentsMethods);
+            
+            var i = 0;
+
+        }
 
         // ReSharper disable once CoVariantArrayConversion
-        return cls.Fields.Select(field =>
+        return fields.Select(field =>
         {
-            Console.WriteLine($"[{field.Name}] -> {field.Signature}");
+            // Console.WriteLine($"[{field.Name}] -> {field.Signature}");
             var type = JavaTypeRef(field.Type);
             var codeProp = new CodeMemberProperty();
             codeProp.Name = EscapedIdent(field.Name);
@@ -408,17 +478,20 @@ public class Writer
         }).ToArray();
     }
 
-    private CodeConstructor[]  LoadConstructors(TypeInfo cls)
+    private CodeMemberMethod[]  LoadConstructors(TypeInfo cls)
     {
-        return Array.Empty<CodeConstructor>();
+        // return Array.Empty<CodeConstructor>();
         
         return cls.Constructors.Select(method =>
         {
-            Console.WriteLine($"CTOR");
-            var codeMethod = new CodeConstructor()
+            var codeMethod = new CodeMemberMethod()
             {
-                Attributes = method.Attributes
+                Name = $"@New",
+                Attributes = method.Attributes,
+                ReturnType = JavaTypeRef(new TypeInfoInstance(cls.Cls))
             };
+            codeMethod.Attributes |= MemberAttributes.Static|MemberAttributes.New; 
+            // codeMethod.Attributes |= ; 
 
             if (method.Throws.Any())
             {
@@ -437,12 +510,23 @@ public class Writer
                 paramNames.Add(name);
             }
 
-            var bindMethod = new CodeMethodReferenceExpression(new CodeThisReferenceExpression(), "BindBySig");
-            var bindInvoke = new CodeMethodInvokeExpression(bindMethod,
-                new CodeExpression[]
-                        { new CodePrimitiveExpression(method.Name), new CodePrimitiveExpression(method.Signature) }
-                    .Concat(paramNames.Select(p => new CodeVariableReferenceExpression(p))).ToArray<CodeExpression>());
-            codeMethod.Statements.Add(bindInvoke);
+            var newObjCallStr = $"Jvm.NewObj<{cls.Name}>({string.Join(", ", paramNames)})";
+            if (cls.ClassPath == "java.lang.String")
+            {
+                newObjCallStr = $"Jvm.ExtractStr({newObjCallStr})";
+            }
+
+            codeMethod.Statements.Add(new CodeMethodReturnStatement(
+                new CodeSnippetExpression(newObjCallStr)));
+            
+            
+            
+            // var bindMethod = new CodeMethodReferenceExpression(new CodeThisReferenceExpression(), "BindBySig");
+            // var bindInvoke = new CodeMethodInvokeExpression(bindMethod,
+            //     new CodeExpression[]
+            //             { new CodePrimitiveExpression(method.Name), new CodePrimitiveExpression(method.Signature) }
+            //         .Concat(paramNames.Select(p => new CodeVariableReferenceExpression(p))).ToArray<CodeExpression>());
+            // codeMethod.Statements.Add(bindInvoke);
             AddSignatureAttribute(codeMethod, method.Signature);
             return codeMethod;
         }).ToArray();
@@ -450,14 +534,83 @@ public class Writer
 
     private CodeMemberMethod[] LoadMethods(TypeInfo cls)
     {
-        return cls.Methods.Select(method =>
+        
+        // abstract classes don't have to fully implement interface but they do in c# so we need retrieve the missing ones and apply them here
+        var methods = cls.Methods.ToList();
+        if (cls.Attributes.HasFlag(TypeAttributes.Abstract))
         {
-            Console.WriteLine($"[{method.Name}] -> {method.Signature}");
+            var implmentsMethods = cls.Implements.SelectMany(iface =>
+            {
+                iface.Info.Load();
+                return iface.Info.Methods;
+            }).Distinct(new MethodEqualityComparer()).Where(m => !cls.Methods.Any(m2 => m.Name == m2.Name && m.Signature == m2.Signature));
+            
+            methods.AddRange(implmentsMethods);
+            
+            var i = 0;
+
+        }
+        
+        
+        
+        return methods.Select(method =>
+        {
+            if (method.Name == "remove" && cls.Name == "Hashtable")
+            {
+                var i = 0;
+            }
             var codeMethod = new CodeMemberMethod()
             {
                 Name = EscapedIdent(method.Name),
                 Attributes = method.Attributes
             };
+            
+            method.TypeParams.ForEach(p =>
+            {
+                var param = new CodeTypeParameter(p.Name);
+                p.Constraints.ForEach(c =>
+                {
+                    var typeStr = JavaTypeRefStr(c);
+                    if (typeStr == "java.lang.Object")
+                    {
+                        return;
+                        typeStr = "Mud.Types.IJavaObject";
+                    }
+                    param.Constraints.Add(new CodeTypeReference(typeStr));
+                });
+                codeMethod.TypeParameters.Add(param);
+            });
+            
+            
+            // this is annoying and not what I want to do but we need to check parent classes to see if we need to override
+
+            var extends = cls.Extends;
+            while (extends?.Info != null)
+            {
+                extends.Info!.Load();
+                TypeInfo.Method parentMethod;
+                // Console.WriteLine($"[{method.Name}] -> {method.Signature}");
+                try
+                {
+                    parentMethod = extends.Info!.Methods.SingleOrDefault(m => m.Name == method.Name && m.Signature == method.Signature)!;
+                }
+                catch (System.InvalidOperationException ex)
+                {
+                    var parentMethods = extends.Info!.Methods.Where(m => m.Name == method.Name && m.Signature == method.Signature).ToArray();
+                    throw;
+                }
+
+                if (parentMethod != null)
+                {
+                    codeMethod.Attributes |= MemberAttributes.Override;
+                    break;
+                }
+                
+                extends = extends.Info.Extends;
+            }
+            
+            
+            
 
             if (method.Throws.Any())
             {
@@ -479,7 +632,9 @@ public class Writer
             // return CallBySig<int>(method.Name, method.GetCustomAttribute<TypeSignatureAttribute>().Signature);
 
             CodeStatement forwarder;
-            var returnType = ReflectParser.TypeFromClass(method.ReturnType!.Info!.Cls);
+            var returnType = method.ReturnType?.Info == null
+                ? new JavaFullType(JavaType.Object)
+                : ReflectParser.TypeFromClass(method.ReturnType!.Info!.Cls);
             if (method.Attributes.HasFlag(MemberAttributes.Static))
             {
                 var args = string.Join(", ", new[] { $"\"{method.Name}\"" }.Concat(paramNames));
@@ -559,3 +714,31 @@ internal static class StringExtension
 
 // var method = MethodBase.GetCurrentMethod();
 // return CallBySig<int>(method.Name, method.GetCustomAttribute<TypeSignatureAttribute>().Signature);
+
+class MethodEqualityComparer : IEqualityComparer<TypeInfo.Method>
+{
+
+    public bool Equals(TypeInfo.Method x, TypeInfo.Method y)
+    {
+        return x.Name == y.Name && x.Signature == y.Signature;
+    }
+
+    public int GetHashCode(TypeInfo.Method obj)
+    {
+        return obj.GetHashCode();
+    }
+}
+
+class FieldEqualityComparer : IEqualityComparer<TypeInfo.Field>
+{
+
+    public bool Equals(TypeInfo.Field x, TypeInfo.Field y)
+    {
+        return x.Name == y.Name && x.Signature == y.Signature;
+    }
+
+    public int GetHashCode(TypeInfo.Field obj)
+    {
+        return obj.GetHashCode();
+    }
+}

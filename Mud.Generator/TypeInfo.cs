@@ -10,6 +10,7 @@ public class TypeInfoInstance
     public List<TypeInfoInstance> Args { get; init; } = new();
     public string? ForwardedArg { get; }
     public bool IsArray { get; set; }
+    public bool IsWildcard { get; set; }
 
     public TypeInfoInstance(Type type)
     {
@@ -38,9 +39,18 @@ public class TypeInfoInstance
                 return;
             }
             case WildcardTypeImpl:
+                IsWildcard = true;
                 return;
             case TypeVariable typeVar:
                 ForwardedArg = typeVar.GetName();
+                return;
+            case GenericArrayTypeImpl arrayTypeImpl:
+                var componentType = arrayTypeImpl.GetGenericComponentType();
+                IsArray = true;
+                Args = new()
+                {
+                    new(componentType)
+                };
                 return;
         }
         throw new NotImplementedException();
@@ -57,9 +67,10 @@ public class TypeInfo
     public JavaClass Cls { get; }
     public bool IsInterface { get; private set; }
     public bool IsEnum { get; private set; }
+    public bool IsPrivate { get; private set; }
     public TypeInfoInstance? Extends { get; private set; }
     public List<TypeInfoInstance> Implements { get; set; } = new();
-    public List<Param> Params { get; private set; } = new();
+    public List<TypeParam> Params { get; private set; } = new();
     public TypeAttributes Attributes { get; private set; }
     private bool IsLoaded { get; set; }
     public List<TypeInfo> Nested { get; private set; } = new();
@@ -110,12 +121,13 @@ public class TypeInfo
             Existing[classPath] = info;
             info.IsInterface = cls.IsInterface();
             info.IsEnum = cls.IsEnum();
+            info.IsPrivate = !Modifier.isPublic(cls.Modifiers);
             var typeParmObjs = cls.GetTypeParameters();
             info.Params = typeParmObjs.Select(p =>
             {
                 var bounds = p.GetBounds();
                 var boundTypes = bounds.Select(b => new TypeInfoInstance(b)).ToList();
-                return new Param(p.GetName(), boundTypes);
+                return new TypeParam(p.GetName(), boundTypes);
             }).ToList();
         } 
         else if (info.Cls != cls)
@@ -130,9 +142,12 @@ public class TypeInfo
         if (IsLoaded) return;
         IsLoaded = true;
         Console.WriteLine($"Loading: {ClassPath}");
-        
-        
-        
+
+
+        if (ClassPath == "java.util.Hashtable$Enumerator")
+        {
+            var i = 0;
+        }
         // if (ClassPath == "java.lang.Class")
         // {
             // Environment.Exit(6);
@@ -168,7 +183,7 @@ public class TypeInfo
         LoadCtors();
         
         var nestedClasses = Cls.GetDeclaredClasses();
-        Nested.AddRange(nestedClasses.Select(GetLoaded));
+        Nested.AddRange(nestedClasses.Select(Get).Where(c => !c.IsPrivate));
     }
 
 
@@ -177,23 +192,41 @@ public class TypeInfo
         var methods = Cls.GetDeclaredMethods();
         foreach (var javaMethod in methods.Where(m => !m.IsSynthetic))
         {
-            var paramTypeObjs = javaMethod.GetParameterTypes();
+            var paramTypeObjs = javaMethod.GetParameters();
             var exceptionTypeObjs = javaMethod.GetExceptionTypes();
-            var returnTypeObj = javaMethod.GetReturnType();
+            var returnTypeObj = javaMethod.GetGenericReturnType();
             var modifiers = javaMethod.Modifiers;
-            
-            var method = new Method(javaMethod.GetName(), 
+            var name = javaMethod.GetName();
+            var method = new Method(name,
                 javaMethod.GetSignature(), new(returnTypeObj),
-                paramTypeObjs.Select(p => new TypeInfoInstance(p)
+                paramTypeObjs.Select(p => new TypeInfoInstance(p.GetParameterizedType())
                 ).ToList(), exceptionTypeObjs.Select(e => new TypeInfoInstance(e)).ToList())
             {
-                Attributes = GetAttributes(modifiers)
+                Attributes = GetAttributes(modifiers),
             };
+
+            if (javaMethod.HasGenericInformation)
+            {
+                method.TypeParams = javaMethod.GetGenericInfo().GetTypeParameters().Select(p =>
+                {
+                    var bounds = p.GetBounds();
+                    var boundTypes = bounds.Select(b => new TypeInfoInstance(b)).ToList();
+                    return new TypeParam(p.GetName(), boundTypes);
+                }).ToList();
+            }
+            // if (method.Name == "compareTo" && ClassPath == "java.lang.Comparable")
+            // {
+            //     var i = 0;
+            //     var param = javaMethod.GetParameterTypes()[0];
+            //     _ = new TypeInfoInstance(param);
+            // }
+            
             // Console.WriteLine($"{depth}{indent}\t[{name}]Method: [{method.Name}] -> {method.Signature}");
             if (modifiers.Has(Modifiers.Synchronized))
             {
                 method.Synchronized = true;
             }
+            if (!modifiers.Has(Modifiers.Public)) continue;
             Methods.Add(method);
         }
     }
@@ -206,6 +239,7 @@ public class TypeInfo
         {
             var type = javaField.GetType();
             var modifiers = javaField.Modifiers;
+            if (!modifiers.Has(Modifiers.Public)) continue;
             Fields.Add(new Field(javaField.GetName(), javaField.GetSignature(), new(type))
             {
                 Attributes = GetAttributes(modifiers)
@@ -231,16 +265,17 @@ public class TypeInfo
             {
                 ctor.Synchronized = true;
             }
+            if (!modifiers.Has(Modifiers.Public)) continue;
             Constructors.Add(ctor);
         }
     }
 
-    public class Param
+    public class TypeParam
     {
         public string Name { get; }
         public List<TypeInfoInstance> Constraints { get; }
 
-        public Param(string name, List<TypeInfoInstance> constraints)
+        public TypeParam(string name, List<TypeInfoInstance> constraints)
         {
             Name = name;
             Constraints = constraints;
@@ -265,6 +300,7 @@ public class TypeInfo
     public class Method 
     {
         public string Name { get; }
+        public List<TypeParam> TypeParams { get; set; } = new();
         public List<TypeInfoInstance> Params { get; }
         public TypeInfoInstance? ReturnType { get; }
         public List<TypeInfoInstance> Throws { get; }
