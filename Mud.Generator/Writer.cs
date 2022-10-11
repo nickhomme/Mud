@@ -565,25 +565,7 @@ public class Writer
                 Attributes = method.Attributes
             };
             
-            method.TypeParams.ForEach(p =>
-            {
-                var param = new CodeTypeParameter(p.Name);
-                p.Constraints.ForEach(c =>
-                {
-                    var typeStr = JavaTypeRefStr(c);
-                    if (typeStr == "java.lang.Object")
-                    {
-                        return;
-                        typeStr = "Mud.Types.IJavaObject";
-                    }
-                    param.Constraints.Add(new CodeTypeReference(typeStr));
-                });
-                codeMethod.TypeParameters.Add(param);
-            });
-            
-            
             // this is annoying and not what I want to do but we need to check parent classes to see if we need to override
-
             var extends = cls.Extends;
             while (extends?.Info != null)
             {
@@ -608,7 +590,25 @@ public class Writer
                 
                 extends = extends.Info.Extends;
             }
-            
+
+            if (!codeMethod.Attributes.HasFlag(MemberAttributes.Override))
+            {
+                method.TypeParams.ForEach(p =>
+                {
+                    var param = new CodeTypeParameter(p.Name);
+                    p.Constraints.ForEach(c =>
+                    {
+                        var typeStr = JavaTypeRefStr(c);
+                        if (typeStr == "java.lang.Object")
+                        {
+                            return;
+                            typeStr = "Mud.Types.IJavaObject";
+                        }
+                        param.Constraints.Add(new CodeTypeReference(typeStr));
+                    });
+                    codeMethod.TypeParameters.Add(param);
+                });
+            }
             
             
 

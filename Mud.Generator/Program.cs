@@ -13,7 +13,7 @@ using TypeInfo = Mud.Generator.TypeInfo;
 var baseDir = Path.Join(Directory.GetCurrentDirectory(), "Mud.J8");
 
 // Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/Signatures/lib/guava-31.1-jre.jar");
-Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/Mud/out/artifacts/Mud_jar/Mud.jar:/Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home/jre/lib/rt.jar");
+Jvm.Initialize("-Djava.class.path=/Users/nicholas/Documents/Dev/Playground/Jdk/Mud/out/artifacts/Mud_jar/Mud.jar:/Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home/jre/lib/rt.jar:/Users/nicholas/Downloads/jt400-9.7.jar");
 
 var mudClsInfo = Jvm.GetClassInfo("com.nickhomme.mud.Mud");
 
@@ -22,11 +22,11 @@ var packages = new List<string>()
     // @"^java\.util\.Collection*"
     // @"^java\.util\.Collection*"
     // @"^java\.util\.*"
-    @"^java\.*"
+    @"^com\.ibm\.*"
 };
 var testingClasses = new List<string>()
 {
-    "java.awt.dnd.DropTargetAdapter",
+    // "java.awt.dnd.DropTargetAdapter",
     // "java.lang.Comparable",
     // "java.lang.Object",
     // "java.lang.String",
@@ -45,14 +45,14 @@ var testingClasses = new List<string>()
 
 var classes = mudClsInfo.CallStaticMethod<string[]>("GetAllLoadedClassPaths").Where(c =>
 {
-
+    
     if (packages.Count > 0 && !packages.Any(p => Regex.Match(c, p).Success))
     {
         return false;
     }
     
     if (testingClasses.Count != 0) return testingClasses.Contains(c);
-    if (!c.StartsWith("java")) return false;
+    // if (!c.StartsWith("java")) return false;
     var subClass = c.Split('$').ElementAtOrDefault(1);
     if (subClass == null) return true;
     return !char.IsDigit(subClass[0]);
@@ -93,7 +93,7 @@ void TryLoadClass(string classPath)
     foreach (var usedClass in writer.UsedClassPaths)
     {
         // Console.WriteLine("Pasing used: " + usedClass);
-        TryLoadClass(usedClass);
+        // TryLoadClass(usedClass);
     }
 }
 
