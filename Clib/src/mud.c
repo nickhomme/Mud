@@ -17,21 +17,22 @@ JavaVMOption* mud_jvm_options_va(size_t amnt, ...) {
   va_start(argsList, amnt);
   for (size_t i = 0; i < amnt; i++) {
     char* arg = va_arg(argsList, char*);
-    size_t len = strlen(arg);
-    options[i].optionString = malloc(sizeof(char) * len + 1);
-    strcpy(options[i].optionString, arg);
+    mud_jvm_options_set(options, i, arg);
   }
   va_end(argsList);
   return options;
 }
-
+void mud_jvm_options_set(JavaVMOption* options, size_t index, const char* arg) {
+  size_t len = strlen(arg);
+  printf("OptStr: [%zu]`%s`\n", len, arg);
+  options[index].optionString = malloc(sizeof(char) * len + 1);
+  memcpy(options[index].optionString, arg, sizeof(char) * len);
+  options[index].optionString[len] = '\0';
+}
 JavaVMOption* mud_jvm_options_str_arr(size_t amnt, const char** optionsArr) {
   JavaVMOption* options = mud_jvm_options(amnt);
   for (size_t i = 0; i < amnt; i++) {
-    const char* arg = optionsArr[i];
-    size_t len = strlen(arg);
-    options[i].optionString = malloc(sizeof(char) * len + 1);
-    strcpy(options[i].optionString, arg);
+    mud_jvm_options_set(options, i, optionsArr[i]);
   }
   return options;
 }
@@ -54,7 +55,7 @@ Java_JVM_Instance mud_jvm_create_instance(JavaVMOption* options, int amnt) {
 
 
 //  options[0].optionString = args;   // where to find java .cls
-  vm_args.version = JNI_VERSION_1_6;             // minimum Java version
+  vm_args.version = JNI_VERSION_1_8;             // minimum Java version
 
 //  vm_args.ignoreUnrecognized = static_cast<jboolean>(false);     // invalid options make the JVM init fail
   vm_args.ignoreUnrecognized = false;
@@ -99,6 +100,7 @@ void mud_add_class_path(JNIEnv* env, const char* path) {
 }
 
 jclass mud_get_class(JNIEnv* env, const char* className) {
+  
   jclass cls = (*env)->FindClass(env, className);
   if (!cls) {
     printf("Error: Class %s not found\n", className);
@@ -196,7 +198,9 @@ struct JavaCallResp_S mud_call_method(JNIEnv* env, jobject obj, jmethodID method
 //  printf("MethodResp: {.ex: _%i_; .vd: _%i_; .val: {.l: _%p_};}\n", resp.is_exception, resp.is_void, resp.value.l);
   return resp;
 }
-
+void reprint_str_test(const char* jstr) {
+  printf("reprintg: `%s`\n", jstr);
+}
 char* mud_jstring_to_string(JNIEnv* env, jstring jstr) {
 
   const char* backingStr = (*env)->GetStringUTFChars(env, jstr, 0);

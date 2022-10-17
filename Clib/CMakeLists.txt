@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
 project(Mud)
+set (CMAKE_SHARED_LIBRARY_PREFIX "lib")
+
+# add these lines
+include(GenerateExportHeader)
+
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
@@ -13,8 +18,18 @@ find_package(JNI REQUIRED)
 find_package(Java REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
+set_target_properties( Mud
+                       PROPERTIES
+                       ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../Native"
+                       LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../Native"
+                       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../Native"
+                       )
+
 if (DEFINED wasm)
 elseif (WIN32)
+    generate_export_header(Mud)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    message(WIDNOWS)
 elseif(APPLE)
     include_directories(${JNI_INCLUDE_DIRS}/darwin)
 elseif(UNIX)

@@ -54,9 +54,9 @@ typedef struct Java_JVM_Instance_S {
 } Java_JVM_Instance;
 
 EXPORT UNUSED JavaVMOption* mud_jvm_options(size_t amnt);
-
+EXPORT UNUSED void mud_jvm_options_set(JavaVMOption* options, size_t index, const char* val);
 EXPORT UNUSED JavaVMOption* mud_jvm_options_va(size_t amnt, ...);
-JavaVMOption* mud_jvm_options_str_arr(size_t amnt, const char** options);
+EXPORT UNUSED JavaVMOption* mud_jvm_options_str_arr(size_t amnt, const char** options);
 EXPORT UNUSED Java_JVM_Instance mud_jvm_create_instance(JavaVMOption* options, int amnt);
 EXPORT UNUSED void mud_jvm_destroy_instance(JavaVM* jvm);
 
@@ -183,6 +183,7 @@ UNUSED static struct JavaCallResp_S mud_call_static_method_by_name(JNIEnv* env, 
 
 
 EXPORT UNUSED char* mud_jstring_to_string(JNIEnv* env, jstring jstr);
+EXPORT UNUSED void reprint_str_test(const char* jstr);
 
 EXPORT UNUSED jfieldID mud_get_field_id(JNIEnv* env, jclass cls, const char* field, const char* signature);
 

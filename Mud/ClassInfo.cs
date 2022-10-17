@@ -210,7 +210,7 @@ public class ClassInfo
         {
             var methodPtr = GetMethodPtr(true, returnType, method, args);
             var resp = MudInterface.call_static_method(Jvm.Instance.Env, Cls, methodPtr, JavaType.Object, jArgs);
-            Console.WriteLine($"resp {resp.Value.Object.HexAddress()}");
+            // Console.WriteLine($"resp {resp.Value.Object.HexAddress()}");
             return resp;
         });
     }

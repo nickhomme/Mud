@@ -7,7 +7,7 @@ Console.WriteLine("Hello, World!");
 
 Jvm.Initialize();
 
-var integerCls = Jvm.GetClassInfo("java.lang.Integer");
+// var integerCls = Jvm.GetClassInfo("java.lang.Integer");
 
 var integer2 = Jvm.GetClassInfo("java.lang.Integer").CallStaticMethodNamedReturn("valueOf", "java.lang.Integer", 9);
 var intVal2 = integer2.Call<int>("intValue");

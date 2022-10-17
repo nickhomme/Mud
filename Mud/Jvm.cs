@@ -13,12 +13,47 @@ public static class Jvm
     internal static Dictionary<string, ClassInfo> ClassInfos { get; } = new();
     private static List<IntPtr> ObjPointers { get; } = new();
 
-    public static void Initialize(params string[] args)
+    public static void Initialize(DirectoryInfo javaHome, params string[] args)
     {
-        var options = MudInterface.gen_options(args.Length, args);
+        args = args.Where(a => !string.IsNullOrWhiteSpace(a)).ToArray();
+        if (!javaHome.Exists)
+        {
+            throw new JavaLocateException($"Path ({javaHome}) provided by JAVA_HOME environment does not exist");
+        }
+        javaHome = javaHome.GetDirectories("jre").FirstOrDefault() ?? javaHome;
+        var libDir = new DirectoryInfo(Path.Join(javaHome.FullName, "lib"));
+        var binDir = new DirectoryInfo(Path.Join(javaHome.FullName, "bin"));
+
+        var rtJar = new FileInfo(Path.Join(libDir.FullName, "rt.jar"));
+        var classPathArgIndex = Array.FindIndex(args, a => a.StartsWith("-Djava.class.path="));
+        if (classPathArgIndex != -1)
+        {
+            var classPathArg = args[classPathArgIndex];
+            if (!Regex.IsMatch(classPathArg, @"(?<=[\\\/]|^)rt\.jar(?=;|:|(?:\s?)+$)"))
+            {
+                var separator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
+                args[classPathArgIndex] = $"{classPathArg}{separator}{rtJar.FullName}";     
+            }
+        }
+        else
+        {
+            args = args.Concat(new[] { $"-Djava.class.path={rtJar.FullName}" }).ToArray();
+        }
+        
+        Console.WriteLine(javaHome);
+        var options = MudInterface.gen_options_arr(args.Length, args);
         Instance = MudInterface.create_instance(options, args.Length);
         MudInterface.interop_free(options);
-        
+    }
+    public static void Initialize(params string[] args)
+    {
+        var javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+        if (string.IsNullOrWhiteSpace(javaHome))
+        {
+            throw new JavaLocateException("JAVA_HOME environment variable not set");
+        }
+
+        Initialize(new DirectoryInfo(javaHome), args);
     }
 
     public static ClassInfo GetClassInfo<T>() where T : JavaObject
@@ -95,11 +130,11 @@ public static class Jvm
     }
     internal static string ExtractStr(IntPtr jString, bool releaseStrObj = false)
     {
-        [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jstring_to_string")]
+        [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_jstring_to_string")]
         static extern IntPtr jstring_to_string(IntPtr env, IntPtr jStr);
-
+        
         var mallocStr = jstring_to_string(Instance.Env, jString);
-        var str = Marshal.PtrToStringAuto(mallocStr)!;
+        var str = Marshal.PtrToStringAnsi(mallocStr)!;
         MudInterface.interop_free(mallocStr);
         if (releaseStrObj)
         {
@@ -138,7 +173,7 @@ public static class Jvm
         var mallocStr = MudInterface.get_exception_msg(Instance.Env, ex, GetExceptionCauseMethod,
             GetExceptionStackMethod, ExceptionToStringMethod,
             FrameToStringMethod, true);
-        var str = Marshal.PtrToStringAuto(mallocStr)!;
+        var str = Marshal.PtrToStringAnsi(mallocStr)!;
         MudInterface.interop_free(mallocStr);
         return str;
     }
@@ -363,58 +398,66 @@ public struct JvmInstance
 
 internal static class MudInterface
 {
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jvm_create_instance")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_jvm_create_instance")]
     internal static extern JvmInstance create_instance(IntPtr options, int optionsAmnt);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jvm_options_str_arr",
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_jvm_options_str_arr",
         CallingConvention = CallingConvention.Cdecl)]
-    internal static extern IntPtr gen_options(int amnt, string[] options);
+    internal static extern IntPtr gen_options_arr(int amnt, string[] options);
+    
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_jvm_options",
+        CallingConvention = CallingConvention.Cdecl)]
+    internal static extern IntPtr gen_options(int amnt);
+    
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_jvm_options_set",
+        CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void options_set(IntPtr options, int index, string arg);
 
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "interop_free")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "interop_free")]
     internal static extern void interop_free(IntPtr ptr);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_exception_msg")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_get_exception_msg")]
     internal static extern IntPtr get_exception_msg(IntPtr env, IntPtr ex, IntPtr getCauseMethod, IntPtr getStackMethod,
         IntPtr exToStringMethod, IntPtr frameToStringMethod, bool isTop);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_string_new")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_string_new")]
     internal static extern JavaString string_new(IntPtr env, string str);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_string_release")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_string_release")]
     internal static extern void string_release(IntPtr env, IntPtr jString, IntPtr charStr);
 
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_method")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_get_method")]
     internal static extern IntPtr get_method(IntPtr env, IntPtr cls, string methodName, string signature);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_static_method",
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_call_static_method",
         CallingConvention = CallingConvention.Cdecl)]
     internal static extern JavaCallResp call_static_method(IntPtr env, IntPtr cls, IntPtr method, JavaType type,
         JavaVal[] args);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_method",
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_call_method",
         CallingConvention = CallingConvention.Cdecl)]
     internal static extern JavaCallResp call_method(IntPtr env, IntPtr obj, IntPtr method, JavaType type,
         JavaVal[] args);
 
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_build_class_object")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_build_class_object")]
     internal static extern IntPtr build_obj_by_path(IntPtr env, string classPath);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_new_object")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_new_object")]
     internal static extern IntPtr new_obj(IntPtr env, IntPtr jClass, string sig, [In, Out] JavaVal[] args);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_class")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_get_class")]
     internal static extern IntPtr get_class(IntPtr env, string classPath);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_class_of_obj")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_get_class_of_obj")]
     internal static extern IntPtr get_class_of_obj(IntPtr env, IntPtr obj);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_static_method")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_get_static_method")]
     internal static extern IntPtr get_static_method(IntPtr env, IntPtr cls, string methodName, string signature);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_method_by_name")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_call_method_by_name")]
     internal static extern JavaCallResp call_method(IntPtr env, IntPtr obj, string method, string signature,
         JavaType type, JavaVal[] args);
 
@@ -426,7 +469,7 @@ internal static class MudInterface
         call_method(env, cls, method, signature, type, Array.Empty<JavaVal>());
 
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_call_static_method_by_name")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_call_static_method_by_name")]
     internal static extern JavaCallResp call_static_method(IntPtr env, IntPtr cls, string method, string signature,
         JavaType type, JavaVal[] args);
 
@@ -435,34 +478,34 @@ internal static class MudInterface
         call_static_method(env, cls, method, signature, type, Array.Empty<JavaVal>());
 
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_field_id")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_get_field_id")]
     internal static extern IntPtr get_field(IntPtr env, IntPtr cls, string name, string signature);
     
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_field_value")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_get_field_value")]
     internal static extern JavaVal get_field_value(IntPtr env, IntPtr obj, IntPtr field, JavaType type);
     
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_set_field_value")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_set_field_value")]
     internal static extern void set_field_value(IntPtr env, IntPtr obj, IntPtr field, JavaType type, JavaVal val);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_get_static_field_value")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_get_static_field_value")]
     internal static extern JavaVal get_static_field_value(IntPtr env, IntPtr cls, IntPtr field, JavaType type);
     
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_set_static_field_value")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_set_static_field_value")]
     internal static extern void set_static_field_value(IntPtr env, IntPtr obj, IntPtr field, JavaType type, JavaVal val);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_release_object")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_release_object")]
     internal static extern void release_obj(IntPtr env, IntPtr obj);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_instance_of")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_instance_of")]
     internal static extern bool instance_of(IntPtr env, IntPtr obj, IntPtr cls);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_array_length")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_array_length")]
     internal static extern int array_length(IntPtr env, IntPtr obj);
 
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_array_get_at")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_array_get_at")]
     internal static extern JavaVal array_get_at(IntPtr env, IntPtr arr, int index, JavaType type);
     
-    [DllImport("libMud", CharSet = CharSet.Auto, EntryPoint = "mud_jvm_destroy_instance")]
+    [DllImport("libMud", CharSet = CharSet.Ansi, EntryPoint = "mud_jvm_destroy_instance")]
     internal static extern void destroy_instance(IntPtr jvm);
 }
 
