@@ -5,27 +5,27 @@ using Mud;
 using Mud.Types;
 Console.WriteLine("Hello, World!");
 
+Jvm.Initialize();
 
-
-
+var integerCls = Jvm.GetClassInfo("java.lang.Integer");
 
 var integer2 = Jvm.GetClassInfo("java.lang.Integer").CallStaticMethodNamedReturn("valueOf", "java.lang.Integer", 9);
 var intVal2 = integer2.Call<int>("intValue");
 Console.WriteLine($"IntVal2: [{intVal2}]");
-
-
-[ClassPath("java.lang.Integer")]
-class Integer : JavaObject
-{
-    public static int MIN_VALUE => Jvm.GetClassInfo<Integer>().GetStaticField<int>("MIN_VALUE");
-    
-    public int HashCode
-    {
-        get => GetProp<int>("hashCode");
-        set => SetProp("hashCode", value);
-    }
-    public int IntValue => Call<int>("intValue");
-}
+//
+//
+// [ClassPath("java.lang.Integer")]
+// class Integer : JavaObject
+// {
+//     public static int MIN_VALUE => Jvm.GetClassInfo<Integer>().GetStaticField<int>("MIN_VALUE");
+//     
+//     public int HashCode
+//     {
+//         get => GetProp<int>("hashCode");
+//         set => SetProp("hashCode", value);
+//     }
+//     public int IntValue => Call<int>("intValue");
+// }
 
 
 // using var jvm = new Jvm("/Users/nicholas/Downloads/commons-math3-3.6.1/commons-math3-3.6.1.jar");
