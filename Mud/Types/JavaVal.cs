@@ -3,19 +3,23 @@ using System.Runtime.InteropServices;
 
 namespace Mud.Types;
 
-internal struct JavaCallResp
+public struct JavaCallResp
 {
+    [MarshalAs(UnmanagedType.U1)]
     public bool IsVoid;
+    [MarshalAs(UnmanagedType.U1)]
     public bool IsException;
-    public JavaArg Value;
+    public JavaVal Value;
+    // [FieldOffset(3)]
 }
 
 
 [StructLayout(LayoutKind.Explicit)]
-internal struct JavaArg
+public struct JavaVal
 {
     [FieldOffset(0)]
-    public byte Bool;
+    [MarshalAs(UnmanagedType.U1)]
+    public bool Bool;
     [FieldOffset(0)]
     public byte Byte;
     [FieldOffset(0)]
@@ -34,9 +38,9 @@ internal struct JavaArg
     public IntPtr Object;
 
 
-    public static JavaArg MapFrom(object val)
+    public static JavaVal MapFrom(object val)
     {
-        var arg = new JavaArg();
+        var arg = new JavaVal();
         switch (val)
         {
             case decimal v:
@@ -52,11 +56,7 @@ internal struct JavaArg
                 arg.Byte = v;
                 break;
             case bool v:
-#if !NET7_0_OR_GREATER
-                arg.Bool = v ? byte.One : byte.Zero);
-#else
-                arg.Bool = (byte)(v ? 1 : 0);
-#endif
+                arg.Bool = v;
                 break;
             case char v:
                 arg.Char = v;
@@ -89,13 +89,28 @@ internal struct JavaArg
 
 
 
-internal class JavaFullType
+public class JavaFullType
 {
     public JavaType Type { get; init; } = 0;
     // public JavaObjType ObjectType { get; init; } = 0;
-    public string? CustomType { get; init; } = null;
+    private string? _customType;
+    public string? CustomType
+    {
+        get => _customType;
+        init => _customType = value?.Replace('.', '/'); 
+    }
     public JavaFullType? ArrayType { get; init; } = null;
 
+    public JavaFullType(ClassInfo cls)
+    {
+        Type = JavaType.Object;
+        CustomType = cls.ClassPath;
+    }
+    public JavaFullType(string type)
+    {
+        Type = JavaType.Object;
+        CustomType = type;
+    }
     public JavaFullType(JavaType type)
     {
         Type = type;

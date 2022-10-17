@@ -4,16 +4,21 @@
         <TargetFramework>net7.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <PackageId>mud</PackageId>
+        <Version>1.0.0</Version>
+        <Authors>Nicholas Homme</Authors>
+        <Company>Company Name</Company>
+        <Product>Mud</Product>
+        <PackageDescription>Library to interact with the JVM</PackageDescription>
+        <PackageTags>Java;JNI;JVM</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
-      <Folder Include="Helpers" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Update="Clib\cmake-build-debug\libMud.dylib">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </None>
+        <Content Include="..\Native\*.*">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <Pack>true</Pack>
+            <PackageCopyToOutput>true</PackageCopyToOutput>
+        </Content>
     </ItemGroup>
 
 </Project>

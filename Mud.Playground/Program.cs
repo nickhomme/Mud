@@ -5,17 +5,35 @@ using Mud;
 using Mud.Types;
 Console.WriteLine("Hello, World!");
 
-// using var jvm = new Jvm("/Users/nicholas/Downloads/commons-math3-3.6.1/commons-math3-3.6.1.jar");
-// using var jvm = new Jvm("-Djava.class.path=/Users/nicholas/Downloads/commons-math3-3.6.1/commons-math3-3.6.1.jar", "-Xlog:class+load=info:classloaded.txt");
-using var jvm = new Jvm();
+Jvm.Initialize();
 
-var integer = jvm.NewObj("java.lang.Integer", 10);
-var intVal = integer.Call<int>("intValue");
-// var intVal2 = jvm.CallStaticReturnType("java.lang.Integer", "valueOf", "java.lang.Integer",  10).Call<int>("intValue");
-Console.WriteLine($"IntVal: [{intVal}]");
-var integer2 = jvm.GetClass("java.lang.Integer").CallStaticMethodNamedReturn("valueOf", "java.lang.Integer", 9);
+// var integerCls = Jvm.GetClassInfo("java.lang.Integer");
+
+var integer2 = Jvm.GetClassInfo("java.lang.Integer").CallStaticMethodNamedReturn("valueOf", "java.lang.Integer", 9);
 var intVal2 = integer2.Call<int>("intValue");
 Console.WriteLine($"IntVal2: [{intVal2}]");
+//
+//
+// [ClassPath("java.lang.Integer")]
+// class Integer : JavaObject
+// {
+//     public static int MIN_VALUE => Jvm.GetClassInfo<Integer>().GetStaticField<int>("MIN_VALUE");
+//     
+//     public int HashCode
+//     {
+//         get => GetProp<int>("hashCode");
+//         set => SetProp("hashCode", value);
+//     }
+//     public int IntValue => Call<int>("intValue");
+// }
+
+
+// using var jvm = new Jvm("/Users/nicholas/Downloads/commons-math3-3.6.1/commons-math3-3.6.1.jar");
+// using var jvm = new Jvm("-Djava.class.path=/Users/nicholas/Downloads/commons-math3-3.6.1/commons-math3-3.6.1.jar", "-Xlog:class+load=info:classloaded.txt");
+// var integer = Jvm.NewObj<Integer>("java.lang.Integer", 10);
+// var intVal = integer.Call<int>("intValue");
+// var intVal2 = jvm.CallStaticReturnType("java.lang.Integer", "valueOf", "java.lang.Integer",  10).Call<int>("intValue");
+// Console.WriteLine($"IntVal: [{intVal}]");
 
 // var strBldr = jvm.NewObj("java.lang.StringBuilder", "Foo");
 // Console.WriteLine($"StrBldr: [{strBldr.Call<string>("toString")}]");
