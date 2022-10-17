@@ -4,8 +4,8 @@
 //
 int main(int argc, char **argv) {
 
-  struct JavaCallResp_S respT = {};
-  union jvalue valT = {};
+  struct JavaCallResp_S respT;
+  union jvalue valT;
   printf("%zu\n%zu\n%zu\n%zu\n", sizeof(respT), sizeof(valT), sizeof(bool), sizeof(char));
 
 //  JavaVMOption* options = mud_jvm_options_va(1, "-Djava.class.path=/Users/nicholas/Documents/ct400/java/jt400.jar:/Users/nicholas/Documents/ct400/java");

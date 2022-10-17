@@ -1,9 +1,10 @@
 //
 // Created by Nicholas Homme on 1/16/20.
 //
-
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
+#endif
 #ifndef CT400_SRC_JVM_JAVA_ARG_H_
 #define CT400_SRC_JVM_JAVA_ARG_H_
 
@@ -33,5 +34,7 @@ typedef enum _Java_Type {
 } Java_Type;
 
 #endif //CT400_SRC_JVM_JAVA_ARG_H_
+#ifdef __clang__
 
 #pragma clang diagnostic pop
+#endif

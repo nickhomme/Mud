@@ -8,7 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#ifndef _WIN32
 #include <printf.h>
+#endif
 
 typedef void* ptr;
 typedef const void* ptr_const;

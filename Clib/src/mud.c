@@ -1,9 +1,12 @@
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 #include "../include/mud.h"
 
-
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "OCUnusedGlobalDeclarationInspection"
+#endif
 JavaVMOption* mud_jvm_options(size_t amnt) {
   return malloc(sizeof(JavaVMOption) * amnt);
 }
@@ -105,7 +108,7 @@ jclass mud_get_class(JNIEnv* env, const char* className) {
   return cls;
 }
 
-__attribute__((unused)) void mud_release_object(JNIEnv* env, jobject obj) {
+ void mud_release_object(JNIEnv* env, jobject obj) {
   (*env)->DeleteLocalRef(env, obj);
 }
 jobject mud_new_object(JNIEnv* env, jclass cls, const char* signature, const jvalue * args) {
@@ -133,7 +136,7 @@ jclass mud_get_class_of_obj(JNIEnv* env, jobject obj) {
   return (*env)->GetObjectClass(env, obj);
 }
 
-__attribute__((unused)) void interop_free(ptr pointer) {
+void interop_free(ptr pointer) {
   safe_free(pointer);
 }
 void mud_string_release(JNIEnv* env, jstring message, const char* msgChars) {
@@ -213,7 +216,7 @@ jvalue mud_get_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type t
   return mud_get_field_handler(env, cls, field, type, false);
 }
 void mud_set_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type, jvalue value) {
-  return mud_set_field_handler(env, cls, field, type, value, false);
+  mud_set_field_handler(env, cls, field, type, value, false);
 }
 
 jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_Type type) {
@@ -221,7 +224,7 @@ jvalue mud_get_static_field_value(JNIEnv* env, jclass cls, jfieldID field, Java_
 }
 
 void mud_set_static_field_value(JNIEnv* env, jobject cls, jfieldID field, Java_Type type, jvalue value) {
-  return mud_set_field_handler(env, cls, field, type, value, true);
+  mud_set_field_handler(env, cls, field, type, value, true);
 }
 
 bool mud_instance_of(JNIEnv* env, jobject obj, jclass cls) {
@@ -261,8 +264,10 @@ jvalue mud_array_get_at(JNIEnv* env, jarray arr, int index, Java_Type type) {
 //  (*env)->GetEle(env, arr, index)
 //}
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "misc-no-recursion"
+#endif
 char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod, jmethodID  getStackMethod, jmethodID exToStringMethod, jmethodID frameToStringMethod,
                             bool isTop) {
 
@@ -360,5 +365,8 @@ char* mud_get_exception_msg(JNIEnv* env, jthrowable ex, jmethodID getCauseMethod
   finalMsg[len] = '\0';
   return finalMsg;
 }
+#ifdef __clang__
 #pragma clang diagnostic pop
 #pragma clang diagnostic pop
+
+#endif
