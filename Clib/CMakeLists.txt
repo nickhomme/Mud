@@ -29,8 +29,13 @@ if (DEFINED wasm)
 elseif (WIN32)
     generate_export_header(Mud)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-    set_target_properties(Mud PROPERTIES PREFIX "../")
-    set_target_properties(Mud PROPERTIES IMPORT_PREFIX "../")
+
+    set_target_properties( Mud PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/../Native" )
+    set_target_properties( Mud PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/../Native" )
+
+    set_target_properties( Mud PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/../Native" )
+    set_target_properties( Mud PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/../Native" )
+
 elseif(APPLE)
     include_directories(${JNI_INCLUDE_DIRS}/darwin)
 elseif(UNIX)
