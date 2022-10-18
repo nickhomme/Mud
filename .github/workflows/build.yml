@@ -1,7 +1,5 @@
 name: Build
 on:
-  push:
-    branches: [ master ]
   pull_request:
     branches: [ master ]
   workflow_dispatch:
@@ -9,7 +7,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
     
@@ -33,32 +31,26 @@ jobs:
           cd Clib
           cmake -DCMAKE_BUILD_TYPE=Debug -S . -B out
           cmake --build out --target Mud
-      
-      - run: ls -lR
-      # Upload the end-user binary artifact
-      - uses: actions/upload-artifact@v2
-        with:
-          name: libMud-${{ matrix.os }}
-          path: Clib/out/libMud*
-          retention-days: 1
-     
+
   release:
     name: "Package"
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v2
-      - name: Display fetched artifacts
-        run: ls -R
-#      - uses: actions/checkout@v3
-#      - name: Setup .NET
-#        uses: actions/setup-dotnet@v3
-#        with:
-#          dotnet-version: '7.0.x'
-#          include-prerelease: true
-#      - name: Restore dependencies
-#        run: dotnet restore
-#      - name: Build
-#        run: dotnet build -c Release --no-restore Mud/Mud.csproj
-#      - name: Pack
-#        run: dotnet pack -c Release -no-build --output .
+
+     - name: Setup .NET
+       uses: actions/setup-dotnet@v3
+       with:
+         dotnet-version: '7.0.x'
+         include-prerelease: true
+     - name: Restore dependencies
+       run: dotnet restore
+     - name: Build
+       run: dotnet build -c Release --no-restore Mud/Mud.csproj
+     - name: Pack
+       run: dotnet pack Mud/Mud.csproj -c Release --no-build --output .
+       
+     - uses: actions/upload-artifact@v2
+       with:
+         path: mud*.nupkg
+         retention-days: 1
