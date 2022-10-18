@@ -9,7 +9,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
     
@@ -33,7 +33,8 @@ jobs:
           cd Clib
           cmake -DCMAKE_BUILD_TYPE=Debug -S . -B out
           cmake --build out --target Mud
-          
+      
+      - run: ls -lR
       # Upload the end-user binary artifact
       - uses: actions/upload-artifact@v2
         with:
