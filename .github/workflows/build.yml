@@ -1,0 +1,50 @@
+name: Build
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Build Clib on Unix
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd Clib
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER="$(which clang)" -DCMAKE_CXX_COMPILER="$(which clang++)" -S . -B out
+          cmake --build out --target Mud
+          
+      - name: Build Clib on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd Clib
+          cmake -DCMAKE_BUILD_TYPE=Debug -S . -B out
+          cmake --build out --target Mud
+     
+  release:
+    name: "Package"
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
+      - name: Display fetched artifacts
+        run: ls -R
+#      - uses: actions/checkout@v3
+#      - name: Setup .NET
+#        uses: actions/setup-dotnet@v3
+#        with:
+#          dotnet-version: '7.0.x'
+#          include-prerelease: true
+#      - name: Restore dependencies
+#        run: dotnet restore
+#      - name: Build
+#        run: dotnet build -c Release --no-restore Mud/Mud.csproj
+#      - name: Pack
+#        run: dotnet pack -c Release -no-build --output .
