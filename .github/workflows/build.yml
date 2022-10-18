@@ -7,7 +7,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
     
@@ -20,24 +20,35 @@ jobs:
       
       - name: Build Clib on Unix
         if: matrix.os != 'windows-latest'
+        working-directory: Clib
         run: |
-          cd Clib
           cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER="$(which clang)" -DCMAKE_CXX_COMPILER="$(which clang++)" -S . -B out
           cmake --build out --target Mud
           
       - name: Build Clib on Windows
         if: matrix.os == 'windows-latest'
+        working-directory: Clib
         run: |
-          cd Clib
           cmake -DCMAKE_BUILD_TYPE=Debug -S . -B out
           cmake --build out --target Mud
+          
+      # Upload the end-user binary artifact
+      - uses: actions/upload-artifact@v3
+        with:
+          path: Native/libMud*
+          retention-days: 1
 
   release:
     name: "Package"
     needs: build
     runs-on: ubuntu-latest
     steps:
+     - uses: actions/checkout@v2
+     - uses: actions/download-artifact@v3
+       with:
+         path: Native
 
+        
      - name: Setup .NET
        uses: actions/setup-dotnet@v3
        with:
