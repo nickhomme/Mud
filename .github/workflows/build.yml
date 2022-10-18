@@ -47,9 +47,7 @@ jobs:
      - uses: actions/download-artifact@v3
      - run: |
             mkdir Native
-            ls -lR
-            mv artifact/libMud* Native/.
-            ls -lR
+            find artifact -type f -name 'libMud*' -exec mv {} Native/. \;
             
      - name: Setup .NET
        uses: actions/setup-dotnet@v3
