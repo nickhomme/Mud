@@ -38,7 +38,7 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: libMud-${{ matrix.os }}
-          path: out/libMud*
+          path: Clib/out/libMud*
           retention-days: 1
      
   release:
