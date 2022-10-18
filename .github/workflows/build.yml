@@ -12,6 +12,12 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
+    
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin' # See 'Supported distributions' for available options
+          java-version: '8'
+          
       - uses: actions/checkout@v2
       
       - name: Build Clib on Unix
@@ -27,6 +33,13 @@ jobs:
           cd Clib
           cmake -DCMAKE_BUILD_TYPE=Debug -S . -B out
           cmake --build out --target Mud
+          
+      # Upload the end-user binary artifact
+      - uses: actions/upload-artifact@v2
+        with:
+          name: libMud-${{ matrix.os }}
+          path: out/libMud*
+          retention-days: 1
      
   release:
     name: "Package"
