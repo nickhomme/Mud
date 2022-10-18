@@ -47,7 +47,7 @@ jobs:
      - uses: actions/download-artifact@v3
        with:
          path: Native
-     - run: lns -lR
+     - run: ls -lR
 
      - name: Setup .NET
        uses: actions/setup-dotnet@v3
