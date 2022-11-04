@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mud", "Mud\Mud.csproj", "{8F1251AC-4C58-4353-BA2B-5F9FDB66FFAC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mud.Test", "Mud.Test\Mud.Test.csproj", "{B65FE708-EBCD-4FF0-9C2E-3BDC59EC918D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mud.Playground", "Mud.Playground\Mud.Playground.csproj", "{21BE0F70-F73E-4E5C-8CA1-45C57CCCE751}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8F1251AC-4C58-4353-BA2B-5F9FDB66FFAC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8F1251AC-4C58-4353-BA2B-5F9FDB66FFAC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8F1251AC-4C58-4353-BA2B-5F9FDB66FFAC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8F1251AC-4C58-4353-BA2B-5F9FDB66FFAC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B65FE708-EBCD-4FF0-9C2E-3BDC59EC918D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B65FE708-EBCD-4FF0-9C2E-3BDC59EC918D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B65FE708-EBCD-4FF0-9C2E-3BDC59EC918D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B65FE708-EBCD-4FF0-9C2E-3BDC59EC918D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{21BE0F70-F73E-4E5C-8CA1-45C57CCCE751}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{21BE0F70-F73E-4E5C-8CA1-45C57CCCE751}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{21BE0F70-F73E-4E5C-8CA1-45C57CCCE751}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{21BE0F70-F73E-4E5C-8CA1-45C57CCCE751}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
