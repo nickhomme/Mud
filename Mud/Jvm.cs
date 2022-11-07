@@ -330,9 +330,11 @@ public static class Jvm
         if (string.IsNullOrWhiteSpace(path)) return;
         
         path = path.Trim();
-        if (!path.StartsWith("file://"))
+        var filePrefix = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "file:/" : "file://";
+        
+        if (!path.StartsWith(filePrefix))
         {
-            path = $"file://{Path.GetFullPath(path)}";
+            path = $"{filePrefix}{Path.GetFullPath(path)}";
         }
         
         MudInterface.add_class_path(Instance.Env, path);
